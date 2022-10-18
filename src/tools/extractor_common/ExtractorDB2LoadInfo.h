@@ -35,7 +35,7 @@ struct CinematicCameraLoadInfo
             { false, FT_INT, "SoundID" },
             { false, FT_FLOAT, "OriginFacing" },
             { false, FT_INT, "FileDataID" },
-            { true, FT_INT, "Unknown10.0.0.45141" },
+            { true, FT_INT, "Unknown10.0.2.45480" },
         };
         static DB2MetaField const fields[5] =
         {
