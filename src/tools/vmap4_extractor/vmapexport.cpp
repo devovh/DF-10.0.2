@@ -425,9 +425,9 @@ static bool RetardCheck()
             if (itr->path().extension() == ".MPQ")
             {
                 printf("MPQ files found in Data directory!\n");
-                printf("This tool works only with World of Warcraft: Shadowlands\n");
+                printf("This tool works only with World of Warcraft: Dragonflight\n");
                 printf("\n");
-                printf("To extract maps for Shadowlands, rebuild tools using 9.1.5 branch!\n");
+                printf("To extract maps for Dragonflight, rebuild tools using 10.0.2 branch!\n");
                 printf("\n");
                 printf("Press ENTER to exit...\n");
                 getchar();
