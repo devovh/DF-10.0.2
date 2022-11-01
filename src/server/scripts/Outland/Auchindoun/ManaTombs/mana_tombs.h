@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -34,10 +34,17 @@ enum MTDataTypes
     DATA_YOR                    = 3
 };
 
-template<typename AI>
-inline AI* GetManaTombsAI(Creature* creature)
+enum MTCreatureIds
 {
-    return GetInstanceAI<AI>(creature, MTScriptName);
+    NPC_TAVAROK = 18343
+};
+
+template <class AI, class T>
+inline AI* GetManaTombsAI(T* obj)
+{
+    return GetInstanceAI<AI>(obj, MTScriptName);
 }
+
+#define RegisterManaTombsCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetManaTombsAI)
 
 #endif // MANA_TOMBS_H_

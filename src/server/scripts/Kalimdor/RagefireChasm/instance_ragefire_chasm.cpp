@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -30,16 +30,15 @@ class instance_ragefire_chasm : public InstanceMapScript
 public:
     instance_ragefire_chasm() : InstanceMapScript("instance_ragefire_chasm", 389) { }
 
-    struct instance_ragefire_chasm_InstanceMapScript : public InstanceScript
-    {
-        instance_ragefire_chasm_InstanceMapScript(InstanceMap* map) : InstanceScript(map) { }
-    };
- 
     InstanceScript* GetInstanceScript(InstanceMap* map) const override
     {
         return new instance_ragefire_chasm_InstanceMapScript(map);
     }
-   
+
+    struct instance_ragefire_chasm_InstanceMapScript : public InstanceScript
+    {
+        instance_ragefire_chasm_InstanceMapScript(InstanceMap* map) : InstanceScript(map) { }
+    };
 };
 
 void AddSC_instance_ragefire_chasm()

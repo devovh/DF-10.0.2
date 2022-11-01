@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -50,8 +50,10 @@ enum BFCreatureIds
     NPC_THE_MAKER               = 17381,
     NPC_BROGGOK                 = 17380,
     NPC_KELIDAN_THE_BREAKER     = 17377,
-    NPC_PRISONER                = 17398,
-    NPC_BROGGOK_POISON_CLOUD    = 17662
+    NPC_PRISONER1               = 17398,
+    NPC_PRISONER2               = 17429,
+    NPC_BROGGOK_POISON_CLOUD    = 17662,
+    NPC_INCOMBAT_TRIGGER        = 16006
 };
 
 enum BFGameObjectIds
@@ -82,10 +84,12 @@ enum BFActionIds
     ACTION_PREPARE_BROGGOK      = 3
 };
 
-template<typename AI>
-inline AI* GetBloodFurnaceAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetBloodFurnaceAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, BFScriptName);
+    return GetInstanceAI<AI>(obj, BFScriptName);
 }
+
+#define RegisterBloodFurnaceCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetBloodFurnaceAI)
 
 #endif // BLOOD_FURNACE_H_

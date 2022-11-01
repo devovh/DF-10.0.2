@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -25,6 +25,15 @@ ObjectData const creatureData[] =
     { 0,                  0                   }
 };
 
+DungeonEncounterData const encounters[] =
+{
+    { DATA_ROMOGG_BONECRUSHER, {{ 1040 }} },
+    { DATA_CORLA, {{ 1038 }} },
+    { DATA_KARSH_STEELBENDER, {{ 1039 }} },
+    { DATA_BEAUTY, {{ 1037 }} },
+    { DATA_ASCENDANT_LORD_OBSIDIUS, {{ 1036 }} }
+};
+
 class instance_blackrock_caverns : public InstanceMapScript
 {
     public:
@@ -37,6 +46,7 @@ class instance_blackrock_caverns : public InstanceMapScript
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
                 LoadObjectData(creatureData, nullptr);
+                LoadDungeonEncounterData(encounters);
             }
 
             bool SetBossState(uint32 type, EncounterState state) override

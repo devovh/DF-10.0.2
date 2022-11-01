@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -20,6 +20,15 @@
 #include "InstanceScript.h"
 #include "the_botanica.h"
 
+DungeonEncounterData const encounters[] =
+{
+    { DATA_COMMANDER_SARANNIS, {{ 1925 }} },
+    { DATA_HIGH_BOTANIST_FREYWINN, {{ 1926 }} },
+    { DATA_THORNGRIN_THE_TENDER, {{ 1928 }} },
+    { DATA_LAJ, {{ 1927 }} },
+    { DATA_WARP_SPLINTER, {{ 1929 }} }
+};
+
 class instance_the_botanica : public InstanceMapScript
 {
     public:
@@ -30,6 +39,8 @@ class instance_the_botanica : public InstanceMapScript
             instance_the_botanica_InstanceMapScript(InstanceMap* map) : InstanceScript(map)
             {
                 SetHeaders(DataHeader);
+                SetBossNumber(EncounterCount);
+                LoadDungeonEncounterData(encounters);
             }
 
             void OnCreatureCreate(Creature* creature) override

@@ -1,5 +1,5 @@
  /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -14,8 +14,6 @@
  * You should have received a copy of the GNU General Public License along
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
-
- //Missing scripts and Bosses
 
 #include "ScriptMgr.h"
 #include "GameObject.h"
@@ -220,9 +218,9 @@ public:
             switch (type)
             {
                 case EVENT_PYRAMID:
-                    PyramidPhase=data;
+                    PyramidPhase = data;
                     break;
-            };
+            }
         }
 
         virtual void Update(uint32 diff) override

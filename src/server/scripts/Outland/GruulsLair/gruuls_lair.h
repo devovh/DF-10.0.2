@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -43,14 +43,14 @@ enum GLCreatureIds
 
 enum GLGameObjectIds
 {
-    GO_MAULGAR_DOOR             = 184468,
+    GO_MAULGAR_DOOR             = 183817,
     GO_GRUUL_DOOR               = 184662
 };
 
-template<typename AI>
-inline AI* GetGruulsLairAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetGruulsLairAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, GLScriptName);
+    return GetInstanceAI<AI>(obj, GLScriptName);
 }
 
 #endif // GRUULS_LAIR_H_

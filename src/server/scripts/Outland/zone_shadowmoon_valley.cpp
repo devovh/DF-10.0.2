@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -37,13 +37,12 @@ EndContentData */
 
 #include "ScriptMgr.h"
 #include "GameObject.h"
+#include "GameObjectAI.h"
 #include "Group.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
-#include "QuestDef.h"
 #include "ScriptedEscortAI.h"
-#include "ScriptedGossip.h"
 #include "SpellInfo.h"
 #include "SpellScript.h"
 #include "TemporarySummon.h"
@@ -59,6 +58,8 @@ enum InvisInfernalCaster
     MODEL_INVISIBLE            = 20577,
     MODEL_INFERNAL             = 17312,
     SPELL_SUMMON_INFERNAL      = 37277,
+    SPELL_SPAWN_AND_PACIFY     = 37791,
+    SPELL_TRANSFORM_INFERNAL   = 37794,
     TYPE_INFERNAL              = 1,
     DATA_DIED                  = 1
 };
@@ -80,7 +81,7 @@ public:
             ground = me->GetPositionZ();
             me->UpdateGroundPositionZ(me->GetPositionX(), me->GetPositionY(), ground);
             SummonInfernal();
-            events.ScheduleEvent(EVENT_CAST_SUMMON_INFERNAL, urand(1000, 3000));
+            events.ScheduleEvent(EVENT_CAST_SUMMON_INFERNAL, 1s, 3s);
         }
 
         void SetData(uint32 id, uint32 data) override
@@ -91,7 +92,7 @@ public:
 
         void SummonInfernal()
         {
-            if (Creature* infernal = me->SummonCreature(NPC_INFERNAL_ATTACKER, me->GetPositionX(), me->GetPositionY(), ground + 0.05f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 60000))
+            if (Creature* infernal = me->SummonCreature(NPC_INFERNAL_ATTACKER, me->GetPositionX(), me->GetPositionY(), ground + 0.05f, 0.0f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 1min))
                 infernalGUID = infernal->GetGUID();
             else
                 infernalGUID = ObjectGuid::Empty;
@@ -110,7 +111,7 @@ public:
                     if (Unit* infernal = ObjectAccessor::GetUnit(*me, infernalGUID))
                         if (infernal->GetDisplayId() == MODEL_INVISIBLE)
                             me->CastSpell(infernal, SPELL_SUMMON_INFERNAL, true);
-                    events.ScheduleEvent(EVENT_CAST_SUMMON_INFERNAL, 12000);
+                    events.ScheduleEvent(EVENT_CAST_SUMMON_INFERNAL, 12s);
                     break;
                 }
                 default:
@@ -150,10 +151,11 @@ public:
             me->GetMotionMaster()->MoveRandom(5.0f);
         }
 
-        void IsSummonedBy(Unit* summoner) override
+        void IsSummonedBy(WorldObject* summoner) override
         {
             if (summoner->ToCreature())
-                casterGUID = summoner->ToCreature()->GetGUID();;
+                casterGUID = summoner->ToCreature()->GetGUID();
+            DoCastSelf(SPELL_SPAWN_AND_PACIFY);
         }
 
         void JustDied(Unit* /*killer*/) override
@@ -162,12 +164,16 @@ public:
                 caster->AI()->SetData(TYPE_INFERNAL, DATA_DIED);
         }
 
-        void SpellHit(Unit* /*caster*/, const SpellInfo* spell) override
+        void SpellHit(WorldObject* /*caster*/, SpellInfo const* spellInfo) override
         {
-            if (spell->Id == SPELL_SUMMON_INFERNAL)
+            if (spellInfo->Id == SPELL_SUMMON_INFERNAL)
             {
-                me->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_PACIFIED | UNIT_FLAG_NOT_SELECTABLE));
+                me->RemoveUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
+                me->SetImmuneToPC(false);
+                me->RemoveAurasDueToSpell(SPELL_SPAWN_AND_PACIFY);
+                // handle by the spell below when such auras will be not removed after evade
                 me->SetDisplayId(MODEL_INFERNAL);
+                // DoCastSelf(SPELL_TRANSFORM_INFERNAL);
             }
         }
 
@@ -249,14 +255,14 @@ public:
             Initialize();
         }
 
-        void SpellHit(Unit* pCaster, SpellInfo const* spell) override
+        void SpellHit(WorldObject* caster, SpellInfo const* spellInfo) override
         {
             if (bCanEat || bIsEating)
                 return;
 
-            if (pCaster->GetTypeId() == TYPEID_PLAYER && spell->Id == SPELL_PLACE_CARCASS && !me->HasAura(SPELL_JUST_EATEN))
+            if (caster->GetTypeId() == TYPEID_PLAYER && spellInfo->Id == SPELL_PLACE_CARCASS && !me->HasAura(SPELL_JUST_EATEN))
             {
-                uiPlayerGUID = pCaster->GetGUID();
+                uiPlayerGUID = caster->GetGUID();
                 bCanEat = true;
             }
         }
@@ -286,9 +292,6 @@ public:
                         {
                             if (GameObject* go = unit->FindNearestGameObject(GO_CARCASS, 10))
                             {
-                                if (me->GetMotionMaster()->GetCurrentMovementGeneratorType() == WAYPOINT_MOTION_TYPE)
-                                    me->GetMotionMaster()->MovementExpired();
-
                                 me->GetMotionMaster()->MoveIdle();
                                 me->StopMoving();
 
@@ -327,7 +330,9 @@ public:
             {
                 DoCastVictim(SPELL_NETHER_BREATH);
                 CastTimer = 5000;
-            } else CastTimer -= diff;
+            }
+            else
+                CastTimer -= diff;
 
             DoMeleeAttackIfReady();
         }
@@ -340,18 +345,19 @@ public:
 
 enum EnshlavedNetherwingDrake
 {
-    // Factions
-    FACTION_DEFAULT                 = 62,
-    FACTION_FRIENDLY                = 1840, // Not sure if this is correct, it was taken off of Mordenai.
-
     // Spells
     SPELL_HIT_FORCE_OF_NELTHARAKU   = 38762,
     SPELL_FORCE_OF_NELTHARAKU       = 38775,
 
     // Creatures
     NPC_DRAGONMAW_SUBJUGATOR        = 21718,
-    NPC_ESCAPE_DUMMY                = 22317
+    NPC_ESCAPE_DUMMY                = 22317,
 
+    // Quests
+    QUEST_THE_FORCE_OF_NELTHARAKU   = 10854,
+
+    // Movement
+    POINT_MOVE_UP                   = 1
 };
 
 class npc_enslaved_netherwing_drake : public CreatureScript
@@ -359,55 +365,44 @@ class npc_enslaved_netherwing_drake : public CreatureScript
 public:
     npc_enslaved_netherwing_drake() : CreatureScript("npc_enslaved_netherwing_drake") { }
 
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_enslaved_netherwing_drakeAI(creature);
-    }
-
     struct npc_enslaved_netherwing_drakeAI : public ScriptedAI
     {
         npc_enslaved_netherwing_drakeAI(Creature* creature) : ScriptedAI(creature)
         {
             Tapped = false;
-            Reset();
+            FlyTimer = 10 * IN_MILLISECONDS;
         }
-
-        ObjectGuid PlayerGUID;
-        uint32 FlyTimer;
-        bool Tapped;
 
         void Reset() override
         {
             if (!Tapped)
-                me->SetFaction(FACTION_DEFAULT);
+                me->SetFaction(FACTION_ORC_DRAGONMAW);
 
-            FlyTimer = 10000;
             me->SetDisableGravity(false);
         }
 
-        void SpellHit(Unit* caster, const SpellInfo* spell) override
+        void SpellHit(WorldObject* caster, SpellInfo const* spellInfo) override
         {
-            if (!caster)
+            Player* playerCaster = caster->ToPlayer();
+            if (!playerCaster)
                 return;
 
-            if (caster->GetTypeId() == TYPEID_PLAYER && spell->Id == SPELL_HIT_FORCE_OF_NELTHARAKU && !Tapped)
+            if (spellInfo->Id == SPELL_HIT_FORCE_OF_NELTHARAKU && !Tapped)
             {
                 Tapped = true;
-                PlayerGUID = caster->GetGUID();
+                PlayerGUID = playerCaster->GetGUID();
 
-                me->SetFaction(FACTION_FRIENDLY);
-                DoCast(caster, SPELL_FORCE_OF_NELTHARAKU, true);
+                me->SetFaction(FACTION_FLAYER_HUNTER);
 
                 Unit* Dragonmaw = me->FindNearestCreature(NPC_DRAGONMAW_SUBJUGATOR, 50);
                 if (Dragonmaw)
                 {
-                    me->AddThreat(Dragonmaw, 100000.0f);
+                    AddThreat(Dragonmaw, 100000.0f);
                     AttackStart(Dragonmaw);
                 }
 
-                HostileReference* ref = me->getThreatManager().getOnlineContainer().getReferenceByTarget(caster);
-                if (ref)
-                    ref->removeReference();
+                FlyTimer = 10 * IN_MILLISECONDS;
+                me->GetThreatManager().ClearThreat(playerCaster);
             }
         }
 
@@ -419,15 +414,9 @@ public:
             if (id == 1)
             {
                 if (!PlayerGUID.IsEmpty())
-                {
-                    Unit* player = ObjectAccessor::GetUnit(*me, PlayerGUID);
-                    if (player)
-                        DoCast(player, SPELL_FORCE_OF_NELTHARAKU, true);
-
                     PlayerGUID.Clear();
-                }
 
-                me->DespawnOrUnsummon(1);
+                me->DespawnOrUnsummon(1ms);
             }
         }
 
@@ -443,16 +432,9 @@ public:
                         if (!PlayerGUID.IsEmpty())
                         {
                             Player* player = ObjectAccessor::GetPlayer(*me, PlayerGUID);
-                            if (player && player->GetQuestStatus(10854) == QUEST_STATUS_INCOMPLETE)
+                            if (player && player->GetQuestStatus(QUEST_THE_FORCE_OF_NELTHARAKU) == QUEST_STATUS_INCOMPLETE)
                             {
                                 DoCast(player, SPELL_FORCE_OF_NELTHARAKU, true);
-                                /*
-                                float x, y, z;
-                                me->GetPosition(x, y, z);
-
-                                float dx, dy, dz;
-                                me->GetRandomPoint(x, y, z, 20, dx, dy, dz);
-                                dz += 20; // so it's in the air, not ground*/
 
                                 Position pos;
                                 if (Unit* EscapeDummy = me->FindNearestCreature(NPC_ESCAPE_DUMMY, 30))
@@ -463,8 +445,9 @@ public:
                                     pos.m_positionZ += 25;
                                 }
 
+                                me->SetCanFly(true);
                                 me->SetDisableGravity(true);
-                                me->GetMotionMaster()->MovePoint(1, pos);
+                                me->GetMotionMaster()->MoveTakeoff(POINT_MOVE_UP, pos);
                             }
                         }
                     } else FlyTimer -= diff;
@@ -474,98 +457,17 @@ public:
 
             DoMeleeAttackIfReady();
         }
+
+    private:
+        ObjectGuid PlayerGUID;
+        uint32 FlyTimer;
+        bool Tapped;
     };
-};
-
-/*#####
-# npc_dragonmaw_peon
-#####*/
-
-class npc_dragonmaw_peon : public CreatureScript
-{
-public:
-    npc_dragonmaw_peon() : CreatureScript("npc_dragonmaw_peon") { }
 
     CreatureAI* GetAI(Creature* creature) const override
     {
-        return new npc_dragonmaw_peonAI(creature);
+        return new npc_enslaved_netherwing_drakeAI(creature);
     }
-
-    struct npc_dragonmaw_peonAI : public ScriptedAI
-    {
-        npc_dragonmaw_peonAI(Creature* creature) : ScriptedAI(creature)
-        {
-            Initialize();
-        }
-
-        void Initialize()
-        {
-            PlayerGUID.Clear();
-            Tapped = false;
-            PoisonTimer = 0;
-        }
-
-        ObjectGuid PlayerGUID;
-        bool Tapped;
-        uint32 PoisonTimer;
-
-        void Reset() override
-        {
-            Initialize();
-        }
-
-        void SpellHit(Unit* caster, const SpellInfo* spell) override
-        {
-            if (!caster)
-                return;
-
-            if (caster->GetTypeId() == TYPEID_PLAYER && spell->Id == 40468 && !Tapped)
-            {
-                PlayerGUID = caster->GetGUID();
-
-                Tapped = true;
-                float x, y, z;
-                caster->GetClosePoint(x, y, z, me->GetObjectSize());
-
-                me->SetWalk(false);
-                me->GetMotionMaster()->MovePoint(1, x, y, z);
-            }
-        }
-
-        void MovementInform(uint32 type, uint32 id) override
-        {
-            if (type != POINT_MOTION_TYPE)
-                return;
-
-            if (id)
-            {
-                me->SetEmoteState(EMOTE_ONESHOT_EAT);
-                PoisonTimer = 15000;
-            }
-        }
-
-        void UpdateAI(uint32 diff) override
-        {
-            if (PoisonTimer)
-            {
-                if (PoisonTimer <= diff)
-                {
-                    if (!PlayerGUID.IsEmpty())
-                    {
-                        Player* player = ObjectAccessor::GetPlayer(*me, PlayerGUID);
-                        if (player && player->GetQuestStatus(11020) == QUEST_STATUS_INCOMPLETE)
-                            player->KilledMonsterCredit(23209);
-                    }
-                    PoisonTimer = 0;
-                    me->DealDamage(me, me->GetHealth(), nullptr, DIRECT_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, nullptr, false);
-                } else PoisonTimer -= diff;
-            }
-            if (!UpdateVictim())
-                return;
-
-            DoMeleeAttackIfReady();
-        }
-    };
 };
 
 /*####
@@ -588,8 +490,7 @@ enum Earthmender
     SPELL_HEALING_WAVE          = 12491,
 
     QUEST_ESCAPE_COILSCAR       = 10451,
-    NPC_COILSKAR_ASSASSIN       = 21044,
-    FACTION_EARTHEN             = 1726                      //guessed
+    NPC_COILSKAR_ASSASSIN       = 21044
 };
 
 class npc_earthmender_wilda : public CreatureScript
@@ -597,27 +498,9 @@ class npc_earthmender_wilda : public CreatureScript
 public:
     npc_earthmender_wilda() : CreatureScript("npc_earthmender_wilda") { }
 
-    bool OnQuestAccept(Player* player, Creature* creature, const Quest* quest) override
+    struct npc_earthmender_wildaAI : public EscortAI
     {
-        if (quest->GetQuestId() == QUEST_ESCAPE_COILSCAR)
-        {
-            creature->AI()->Talk(SAY_WIL_START, player);
-            creature->SetFaction(FACTION_EARTHEN);
-
-            if (npc_earthmender_wildaAI* pEscortAI = CAST_AI(npc_earthmender_wilda::npc_earthmender_wildaAI, creature->AI()))
-                pEscortAI->Start(false, false, player->GetGUID(), quest);
-        }
-        return true;
-    }
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_earthmender_wildaAI(creature);
-    }
-
-    struct npc_earthmender_wildaAI : public npc_escortAI
-    {
-        npc_earthmender_wildaAI(Creature* creature) : npc_escortAI(creature)
+        npc_earthmender_wildaAI(Creature* creature) : EscortAI(creature)
         {
             Initialize();
         }
@@ -634,7 +517,7 @@ public:
             Initialize();
         }
 
-        void WaypointReached(uint32 waypointId) override
+        void WaypointReached(uint32 waypointId, uint32 /*pathId*/) override
         {
             Player* player = GetPlayerForEscort();
             if (!player)
@@ -707,10 +590,10 @@ public:
         void DoSpawnAssassin()
         {
             //unknown where they actually appear
-            DoSummon(NPC_COILSKAR_ASSASSIN, me, 15.0f, 5000, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT);
+            DoSummon(NPC_COILSKAR_ASSASSIN, me, 15.0f, 5s, TEMPSUMMON_TIMED_DESPAWN_OUT_OF_COMBAT);
         }
 
-        void EnterCombat(Unit* who) override
+        void JustEngagedWith(Unit* who) override
         {
             //don't always use
             if (rand32() % 5)
@@ -727,7 +610,7 @@ public:
 
         void UpdateAI(uint32 uiDiff) override
         {
-            npc_escortAI::UpdateAI(uiDiff);
+            EscortAI::UpdateAI(uiDiff);
 
             if (!UpdateVictim())
                 return;
@@ -744,7 +627,24 @@ public:
                     m_uiHealingTimer -= uiDiff;
             }
         }
+
+        void OnQuestAccept(Player* player, Quest const* quest) override
+        {
+            if (quest->GetQuestId() == QUEST_ESCAPE_COILSCAR)
+            {
+                Talk(SAY_WIL_START, player);
+                me->SetFaction(FACTION_EARTHEN_RING);
+
+                Start(false, false, player->GetGUID(), quest);
+            }
+        }
     };
+
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_earthmender_wildaAI(creature);
+    }
+
 };
 
 /*#####
@@ -881,11 +781,11 @@ public:
             Initialize();
 
             me->AddUnitState(UNIT_STATE_ROOT);
-            me->AddUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            me->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
             me->SetTarget(ObjectGuid::Empty);
         }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override { }
 
         void HandleAnimation()
         {
@@ -913,7 +813,7 @@ public:
                 if (Player* AggroTarget = ObjectAccessor::GetPlayer(*me, AggroTargetGUID))
                 {
                     me->SetTarget(AggroTarget->GetGUID());
-                    me->AddThreat(AggroTarget, 1);
+                    AddThreat(AggroTarget, 1);
                     me->HandleEmoteCommand(EMOTE_ONESHOT_POINT);
                 }
                 break;
@@ -979,6 +879,9 @@ public:
 
         void JustDied(Unit* killer) override
         {
+            if (!killer)
+                return;
+
             switch (killer->GetTypeId())
             {
                 case TYPEID_UNIT:
@@ -1054,7 +957,7 @@ public:
             me->SetVisible(false);
         }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override { }
         void MoveInLineOfSight(Unit* /*who*/) override { }
 
         void AttackStart(Unit* /*who*/) override { }
@@ -1189,7 +1092,7 @@ public:
             Initialize();
         }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override { }
 
         void JustDied(Unit* /*killer*/) override
         {
@@ -1236,7 +1139,7 @@ public:
             {
                 if (SpellTimer1 <= diff)
                 {
-                    if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0))
+                    if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0))
                     {
                         if (target->GetTypeId() == TYPEID_PLAYER)
                         {
@@ -1288,7 +1191,7 @@ void npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI::SummonNextWave()
 
     for (uint8 i = 0; i < count; ++i)
     {
-        Creature* Spawn = me->SummonCreature(WavesInfo[WaveCount].CreatureId, SpawnLocation[locIndex + i], TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 60000);
+        Creature* Spawn = me->SummonCreature(WavesInfo[WaveCount].CreatureId, SpawnLocation[locIndex + i], TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 1min);
         ++LiveCount;
 
         if (Spawn)
@@ -1353,20 +1256,28 @@ class go_crystal_prison : public GameObjectScript
 public:
     go_crystal_prison() : GameObjectScript("go_crystal_prison") { }
 
-    bool OnQuestAccept(Player* player, GameObject* /*go*/, Quest const* quest) override
+    struct go_crystal_prisonAI : GameObjectAI
     {
-        if (quest->GetQuestId() == QUEST_BATTLE_OF_THE_CRIMSON_WATCH)
-        {
-            Creature* Illidan = player->FindNearestCreature(22083, 50);
+        go_crystal_prisonAI(GameObject* go) : GameObjectAI(go) { }
 
-            if (Illidan && !ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, Illidan->AI())->EventStarted)
+        void OnQuestAccept(Player* player, Quest const* quest) override
+        {
+            if (quest->GetQuestId() == QUEST_BATTLE_OF_THE_CRIMSON_WATCH)
             {
-                ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, Illidan->AI())->PlayerGUID = player->GetGUID();
-                ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, Illidan->AI())->LiveCount = 0;
-                ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, Illidan->AI())->EventStarted = true;
+                Creature* illidan = player->FindNearestCreature(22083, 50);
+                if (illidan && !ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, illidan->AI())->EventStarted)
+                {
+                    ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, illidan->AI())->PlayerGUID = player->GetGUID();
+                    ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, illidan->AI())->LiveCount = 0;
+                    ENSURE_AI(npc_lord_illidan_stormrage::npc_lord_illidan_stormrageAI, illidan->AI())->EventStarted = true;
+                }
             }
         }
-     return true;
+    };
+
+    GameObjectAI* GetAI(GameObject* go) const override
+    {
+        return new go_crystal_prisonAI(go);
     }
 };
 
@@ -1376,7 +1287,7 @@ public:
 
 enum Enraged_Dpirits
 {
-// QUESTS
+    // QUESTS
     QUEST_ENRAGED_SPIRITS_FIRE_EARTH        = 10458,
     QUEST_ENRAGED_SPIRITS_AIR               = 10481,
     QUEST_ENRAGED_SPIRITS_WATER             = 10480,
@@ -1390,6 +1301,22 @@ enum Enraged_Dpirits
     NPC_ENRAGED_FIRE_SPIRIT                 = 21061,
     NPC_ENRAGED_AIR_SPIRIT                  = 21060,
     NPC_ENRAGED_WATER_SPIRIT                = 21059,
+
+    // ENRAGED WATER SPIRIT SPELLS
+    SPELL_STORMBOLT                         = 38032,
+
+    // ENRAGED AIR SPIRIT SPELLS
+    SPELL_AIR_SPIRIT_CHAIN_LIGHTNING        = 12058,
+    SPELL_HURRICANE                         = 32717,
+    SPELL_ENRAGE                            = 8599,
+
+    // ENRAGED FIRE SPIRIT SPELLS - Will be using the enrage spell from Air Spirit
+    SPELL_FEL_FIREBALL                      = 36247,
+    SPELL_FEL_FIRE_AURA                     = 36006, // Earth spirit uses this one
+
+    // ENRAGED EARTH SPIRIT SPELLS
+    SPELL_FIERY_BOULDER                     = 38498,
+    SPELL_SUMMON_ENRAGED_EARTH_SHARD        = 38365,
 
     // SOULS
     NPC_EARTHEN_SOUL                        = 21073,
@@ -1410,11 +1337,16 @@ enum Enraged_Dpirits
     NPC_CREDIT_EARTH                        = 21092,
 
     // Captured Spell / Buff
-    SPELL_SOUL_CAPTURED                     = 36115,
+    SPELL_SOUL_CAPTURED                     = 36115
+};
 
-    // Factions
-    FACTION_ENRAGED_SOUL_FRIENDLY           = 35,
-    FACTION_ENRAGED_SOUL_HOSTILE            = 14
+enum Enraged_Spirits_Events
+{
+    EVENT_ENRAGED_WATER_SPIRIT                  = 1,
+    EVENT_ENRAGED_FIRE_SPIRIT                   = 2,
+    EVENT_ENRAGED_EARTH_SPIRIT                  = 3,
+    EVENT_ENRAGED_AIR_SPIRIT_CHAIN_LIGHTNING    = 4,
+    EVENT_ENRAGED_AIR_SPIRIT_HURRICANE          = 5
 };
 
 class npc_enraged_spirit : public CreatureScript
@@ -1424,7 +1356,7 @@ public:
 
     CreatureAI* GetAI(Creature* creature) const override
     {
-    return new npc_enraged_spiritAI(creature);
+        return new npc_enraged_spiritAI(creature);
     }
 
     struct npc_enraged_spiritAI : public ScriptedAI
@@ -1433,7 +1365,77 @@ public:
 
         void Reset() override { }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override
+        {
+            switch (me->GetEntry())
+            {
+                case NPC_ENRAGED_WATER_SPIRIT:
+                    _events.ScheduleEvent(EVENT_ENRAGED_WATER_SPIRIT, 0s, Seconds(1));
+                    break;
+                case NPC_ENRAGED_FIRE_SPIRIT:
+                    if (!me->GetAura(SPELL_FEL_FIRE_AURA))
+                        DoCastSelf(SPELL_FEL_FIRE_AURA);
+                    _events.ScheduleEvent(EVENT_ENRAGED_FIRE_SPIRIT, 2s, 10s);
+                    break;
+                case NPC_ENRAGED_EARTH_SPIRIT:
+                    if (!me->GetAura(SPELL_FEL_FIRE_AURA))
+                        DoCastSelf(SPELL_FEL_FIRE_AURA);
+                    _events.ScheduleEvent(EVENT_ENRAGED_EARTH_SPIRIT, 3s, 4s);
+                    break;
+                case NPC_ENRAGED_AIR_SPIRIT:
+                    _events.ScheduleEvent(EVENT_ENRAGED_AIR_SPIRIT_CHAIN_LIGHTNING, 10s);
+                    break;
+                default:
+                    break;
+            }
+        }
+
+        void UpdateAI(uint32 diff) override
+        {
+            if (!UpdateVictim())
+                return;
+            _events.Update(diff);
+
+            while (uint32 eventId = _events.ExecuteEvent())
+            {
+                switch (eventId)
+                {
+                    case EVENT_ENRAGED_WATER_SPIRIT:
+                        if (UpdateVictim())
+                            DoCastVictim(SPELL_STORMBOLT);
+                        _events.Repeat(Seconds(17), Seconds(23));
+                        break;
+                    case EVENT_ENRAGED_FIRE_SPIRIT:
+                        if (UpdateVictim())
+                            DoCastVictim(SPELL_FEL_FIREBALL);
+                        _events.Repeat(Seconds(6), Seconds(12));
+                        break;
+                    case EVENT_ENRAGED_EARTH_SPIRIT:
+                        if (UpdateVictim())
+                            DoCastVictim(SPELL_FIERY_BOULDER);
+                        _events.Repeat(Seconds(6), Seconds(9));
+                        break;
+                    case EVENT_ENRAGED_AIR_SPIRIT_CHAIN_LIGHTNING:
+                        if (UpdateVictim())
+                            DoCastVictim(SPELL_CHAIN_LIGHTNING);
+                        _events.ScheduleEvent(EVENT_ENRAGED_AIR_SPIRIT_HURRICANE, 3s, 5s);
+                        break;
+                    case EVENT_ENRAGED_AIR_SPIRIT_HURRICANE:
+                        if (UpdateVictim())
+                            DoCastVictim(SPELL_HURRICANE);
+                        _events.ScheduleEvent(EVENT_ENRAGED_AIR_SPIRIT_CHAIN_LIGHTNING, 15s, 20s);
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+        if (me->GetEntry() == NPC_ENRAGED_FIRE_SPIRIT || me->GetEntry() == NPC_ENRAGED_AIR_SPIRIT)
+            if (HealthBelowPct(35) && !me->GetAura(SPELL_ENRAGE))
+                DoCastSelf(SPELL_ENRAGE);
+
+        DoMeleeAttackIfReady();
+        }
 
         void JustDied(Unit* /*killer*/) override
         {
@@ -1454,6 +1456,7 @@ public:
                     entry  = NPC_EARTHEN_SOUL;
                     //credit = SPELL_EARTHEN_SOUL_CAPTURED_CREDIT;
                     credit = NPC_CREDIT_EARTH;
+                    DoCastSelf(SPELL_SUMMON_ENRAGED_EARTH_SHARD);
                     break;
                   case NPC_ENRAGED_AIR_SPIRIT:
                     entry  = NPC_ENRAGED_AIRY_SOUL;
@@ -1474,7 +1477,7 @@ public:
             Unit* totemOspirits = nullptr;
 
             if (entry != 0)
-                Summoned = DoSpawnCreature(entry, 0, 0, 1, 0, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 5000);
+                Summoned = DoSpawnCreature(entry, 0, 0, 1, 0, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 5s);
 
             // FIND TOTEM, PROCESS QUEST
             if (Summoned)
@@ -1482,7 +1485,7 @@ public:
                  totemOspirits = me->FindNearestCreature(ENTRY_TOTEM_OF_SPIRITS, RADIUS_TOTEM_OF_SPIRITS);
                  if (totemOspirits)
                  {
-                     Summoned->SetFaction(FACTION_ENRAGED_SOUL_FRIENDLY);
+                     Summoned->SetFaction(FACTION_FRIENDLY);
                      Summoned->GetMotionMaster()->MovePoint(0, totemOspirits->GetPositionX(), totemOspirits->GetPositionY(), Summoned->GetPositionZ());
 
                      if (Unit* owner = totemOspirits->GetOwner())
@@ -1492,6 +1495,9 @@ public:
                  }
             }
         }
+
+    private:
+        EventMap _events;
     };
 };
 
@@ -1500,6 +1506,7 @@ enum ZuluhedChains
     NPC_KARYNAKU    = 22112,
 };
 
+// 38790 - Unlocking Zuluhed's Chains
 class spell_unlocking_zuluheds_chains : public SpellScriptLoader
 {
     public:
@@ -1566,9 +1573,9 @@ public:
             }
         }
 
-        void SpellHit(Unit* /*caster*/, const SpellInfo* spell) override
+        void SpellHit(WorldObject* /*caster*/, SpellInfo const* spellInfo) override
         {
-            if (spell->Id == SPELL_WHISTLE)
+            if (spellInfo->Id == SPELL_WHISTLE)
             {
                 if (Creature* boar = me->FindNearestCreature(NPC_BOAR_ENTRY, 30.0f))
                 {
@@ -1585,13 +1592,81 @@ public:
     }
 };
 
+/*######
+## Quest 10769, 10776: Dissension Amongst the Ranks...
+######*/
+
+enum DissensionAmongstTheRanks
+{
+    SPELL_ILLIDARI_DISGUISE_MALE          = 38225,
+    SPELL_ILLIDARI_DISGUISE_FEMALE        = 38227,
+    SPELL_KILL_CREDIT_CRAZED_COLOSSUS     = 38228
+};
+
+// 38224 - Illidari Agent Illusion
+class spell_shadowmoon_illidari_agent_illusion : public AuraScript
+{
+    PrepareAuraScript(spell_shadowmoon_illidari_agent_illusion);
+
+    bool Validate(SpellInfo const* /*spellInfo*/) override
+    {
+        return ValidateSpellInfo({ SPELL_ILLIDARI_DISGUISE_MALE, SPELL_ILLIDARI_DISGUISE_FEMALE });
+    }
+
+    void AfterApply(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        if (Player* target = GetTarget()->ToPlayer())
+            target->CastSpell(target, target->GetNativeGender() == GENDER_MALE ?
+            SPELL_ILLIDARI_DISGUISE_MALE : SPELL_ILLIDARI_DISGUISE_FEMALE);
+    }
+
+    void AfterRemove(AuraEffect const* /*aurEff*/, AuraEffectHandleModes /*mode*/)
+    {
+        Unit* target = GetTarget();
+        target->RemoveAurasDueToSpell(SPELL_ILLIDARI_DISGUISE_MALE);
+        target->RemoveAurasDueToSpell(SPELL_ILLIDARI_DISGUISE_FEMALE);
+    }
+
+    void Register() override
+    {
+        AfterEffectApply += AuraEffectApplyFn(spell_shadowmoon_illidari_agent_illusion::AfterApply, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+        AfterEffectRemove += AuraEffectApplyFn(spell_shadowmoon_illidari_agent_illusion::AfterRemove, EFFECT_0, SPELL_AURA_DUMMY, AURA_EFFECT_HANDLE_REAL);
+    }
+};
+
+// 38223 - Quest Credit: Crazed Colossus
+class spell_shadowmoon_quest_credit_crazed_colossus : public SpellScript
+{
+    PrepareSpellScript(spell_shadowmoon_quest_credit_crazed_colossus);
+
+    bool Validate(SpellInfo const* spellInfo) override
+    {
+        return ValidateSpellInfo(
+        {
+            uint32(spellInfo->GetEffect(EFFECT_0).CalcValue()),
+            SPELL_KILL_CREDIT_CRAZED_COLOSSUS
+        });
+    }
+
+    void HandleScript(SpellEffIndex /*effIndex*/)
+    {
+        Unit* target = GetHitUnit();
+        if (target->HasAura(uint32(GetEffectValue())))
+            target->CastSpell(target, SPELL_KILL_CREDIT_CRAZED_COLOSSUS);
+    }
+
+    void Register() override
+    {
+        OnEffectHitTarget += SpellEffectFn(spell_shadowmoon_quest_credit_crazed_colossus::HandleScript, EFFECT_0, SPELL_EFFECT_SCRIPT_EFFECT);
+    }
+};
+
 void AddSC_shadowmoon_valley()
 {
     new npc_invis_infernal_caster();
     new npc_infernal_attacker();
     new npc_mature_netherwing_drake();
     new npc_enslaved_netherwing_drake();
-    new npc_dragonmaw_peon();
     new npc_earthmender_wilda();
     new npc_lord_illidan_stormrage();
     new go_crystal_prison();
@@ -1600,4 +1675,6 @@ void AddSC_shadowmoon_valley()
     new npc_enraged_spirit();
     new spell_unlocking_zuluheds_chains();
     new npc_shadowmoon_tuber_node();
+    RegisterSpellScript(spell_shadowmoon_illidari_agent_illusion);
+    RegisterSpellScript(spell_shadowmoon_quest_credit_crazed_colossus);
 }

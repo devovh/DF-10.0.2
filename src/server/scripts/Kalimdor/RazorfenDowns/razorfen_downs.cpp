@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -28,13 +28,13 @@ EndContentData */
 
 #include "ScriptMgr.h"
 #include "CellImpl.h"
+#include "GameObjectAI.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceScript.h"
 #include "MotionMaster.h"
 #include "Player.h"
 #include "razorfen_downs.h"
 #include "ScriptedCreature.h"
-#include "ScriptedGossip.h"
 #include "TemporarySummon.h"
 
 /*###
@@ -56,8 +56,6 @@ enum Belnistrasz
     EVENT_COMPLETE               = 4,
     EVENT_FIREBALL               = 5,
     EVENT_FROST_NOVA             = 6,
-
-    FACTION_ESCORT               = 250,
 
     PATH_ESCORT                  = 871710,
     POINT_REACH_IDOL             = 17,
@@ -106,18 +104,18 @@ public:
                 channeling = false;
                 eventProgress = 0;
                 spawnerCount  = 0;
-                me->AddNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
+                me->SetNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
             }
         }
 
-        void EnterCombat(Unit* who) override
+        void JustEngagedWith(Unit* who) override
         {
             if (channeling)
                 Talk(SAY_WATCH_OUT, who);
             else
             {
-                events.ScheduleEvent(EVENT_FIREBALL, 1000);
-                events.ScheduleEvent(EVENT_FROST_NOVA, urand(8000, 12000));
+                events.ScheduleEvent(EVENT_FIREBALL, 1s);
+                events.ScheduleEvent(EVENT_FROST_NOVA, 8s, 12s);
                 if (urand(0, 100) > 40)
                     Talk(SAY_AGGRO, who);
             }
@@ -126,17 +124,17 @@ public:
         void JustDied(Unit* /*killer*/) override
         {
             instance->SetBossState(DATA_EXTINGUISHING_THE_IDOL, DONE);
-            me->DespawnOrUnsummon(5000);
+            me->DespawnOrUnsummon(5s);
         }
 
-        void sQuestAccept(Player* /*player*/, Quest const* quest) override
+        void OnQuestAccept(Player* /*player*/, Quest const* quest) override
         {
             if (quest->GetQuestId() == QUEST_EXTINGUISHING_THE_IDOL)
             {
                 eventInProgress = true;
                 Talk(SAY_QUEST_ACCEPTED);
                 me->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
-                me->SetFaction(FACTION_ESCORT);
+                me->SetFaction(FACTION_ESCORTEE_N_NEUTRAL_ACTIVE);
                 me->GetMotionMaster()->MovePath(PATH_ESCORT, false);
             }
         }
@@ -146,7 +144,7 @@ public:
             if (type == WAYPOINT_MOTION_TYPE && id == POINT_REACH_IDOL)
             {
                 channeling = true;
-                events.ScheduleEvent(EVENT_CHANNEL, 2000);
+                events.ScheduleEvent(EVENT_CHANNEL, 2s);
             }
         }
 
@@ -164,14 +162,14 @@ public:
                     case EVENT_CHANNEL:
                         Talk(SAY_EVENT_START);
                         DoCastSelf(SPELL_IDOL_SHUTDOWN_VISUAL);
-                        events.ScheduleEvent(EVENT_IDOL_ROOM_SPAWNER, 100);
-                        events.ScheduleEvent(EVENT_PROGRESS, 120000);
+                        events.ScheduleEvent(EVENT_IDOL_ROOM_SPAWNER, 100ms);
+                        events.ScheduleEvent(EVENT_PROGRESS, 120s);
                         break;
                     case EVENT_IDOL_ROOM_SPAWNER:
-                        if (Creature* creature = me->SummonCreature(NPC_IDOL_ROOM_SPAWNER, PosSummonSpawner[urand(0,2)], TEMPSUMMON_TIMED_DESPAWN, 4000))
+                        if (Creature* creature = me->SummonCreature(NPC_IDOL_ROOM_SPAWNER, PosSummonSpawner[urand(0,2)], TEMPSUMMON_TIMED_DESPAWN, 4s))
                             creature->AI()->SetData(0, spawnerCount);
                         if (++spawnerCount < 8)
-                            events.ScheduleEvent(EVENT_IDOL_ROOM_SPAWNER, 35000);
+                            events.ScheduleEvent(EVENT_IDOL_ROOM_SPAWNER, 35s);
                         break;
                     case EVENT_PROGRESS:
                     {
@@ -180,23 +178,23 @@ public:
                             case 0:
                                 Talk(SAY_EVENT_THREE_MIN_LEFT);
                                 ++eventProgress;
-                                 events.ScheduleEvent(EVENT_PROGRESS, 60000);
+                                 events.ScheduleEvent(EVENT_PROGRESS, 1min);
                                  break;
                             case 1:
                                 Talk(SAY_EVENT_TWO_MIN_LEFT);
                                 ++eventProgress;
-                                events.ScheduleEvent(EVENT_PROGRESS, 60000);
+                                events.ScheduleEvent(EVENT_PROGRESS, 1min);
                                 break;
                             case 2:
                                 Talk(SAY_EVENT_ONE_MIN_LEFT);
                                 ++eventProgress;
-                                events.ScheduleEvent(EVENT_PROGRESS, 60000);
+                                events.ScheduleEvent(EVENT_PROGRESS, 1min);
                                 break;
                             case 3:
                                 events.CancelEvent(EVENT_IDOL_ROOM_SPAWNER);
                                 me->InterruptSpell(CURRENT_CHANNELED_SPELL);
                                 Talk(SAY_EVENT_END);
-                                events.ScheduleEvent(EVENT_COMPLETE, 3000);
+                                events.ScheduleEvent(EVENT_COMPLETE, 3s);
                                 break;
                         }
                           break;
@@ -204,7 +202,7 @@ public:
                     case EVENT_COMPLETE:
                     {
                         DoCastSelf(SPELL_IDOM_ROOM_CAMERA_SHAKE);
-                        me->SummonGameObject(GO_BELNISTRASZS_BRAZIER, 2577.196f, 947.0781f, 53.16757f, 2.356195f, QuaternionData(0.f, 0.f, 0.9238796f, 0.3826832f), HOUR);
+                        me->SummonGameObject(GO_BELNISTRASZS_BRAZIER, 2577.196f, 947.0781f, 53.16757f, 2.356195f, QuaternionData(0.f, 0.f, 0.9238796f, 0.3826832f), 1h, GO_SUMMON_TIMED_DESPAWN);
                         std::list<WorldObject*> ClusterList;
                         Trinity::AllWorldObjectsInRange objects(me, 50.0f);
                         Trinity::WorldObjectListSearcher<Trinity::AllWorldObjectsInRange> searcher(me, ClusterList, objects);
@@ -230,13 +228,13 @@ public:
                         if (me->HasUnitState(UNIT_STATE_CASTING) || !UpdateVictim())
                             return;
                         DoCastVictim(SPELL_FIREBALL);
-                        events.ScheduleEvent(EVENT_FIREBALL, 8000);
+                        events.ScheduleEvent(EVENT_FIREBALL, 8s);
                         break;
                     case EVENT_FROST_NOVA:
                         if (me->HasUnitState(UNIT_STATE_CASTING) || !UpdateVictim())
                             return;
                         DoCastAOE(SPELL_FROST_NOVA);
-                        events.ScheduleEvent(EVENT_FROST_NOVA, 15000);
+                        events.ScheduleEvent(EVENT_FROST_NOVA, 15s);
                         break;
                 }
             }
@@ -331,9 +329,9 @@ public:
             instance->SetData(DATA_WAVE, me->GetEntry());
         }
 
-        void EnterCombat(Unit* /*who*/) override
+        void JustEngagedWith(Unit* /*who*/) override
         {
-            events.ScheduleEvent(EVENT_WEB, urand(5000, 8000));
+            events.ScheduleEvent(EVENT_WEB, 5s, 8s);
         }
 
         void UpdateAI(uint32 diff) override
@@ -349,7 +347,7 @@ public:
                 {
                     case EVENT_WEB:
                         DoCastVictim(SPELL_WEB);
-                        events.ScheduleEvent(EVENT_WEB, urand(7000, 16000));
+                        events.ScheduleEvent(EVENT_WEB, 7s, 16s);
                         break;
                 }
             }
@@ -376,19 +374,24 @@ class go_gong : public GameObjectScript
 public:
     go_gong() : GameObjectScript("go_gong") { }
 
-    bool OnGossipHello(Player* /*player*/, GameObject* go) override
+    struct go_gongAI : public GameObjectAI
     {
-        InstanceScript* instance = go->GetInstanceScript();
+        go_gongAI(GameObject* go) : GameObjectAI(go), instance(go->GetInstanceScript()) { }
 
-        if (instance)
+        InstanceScript* instance;
+
+        bool OnGossipHello(Player* /*player*/) override
         {
-            go->SendCustomAnim(0);
+            me->SendCustomAnim(0);
             instance->SetData(DATA_WAVE, IN_PROGRESS);
             return true;
         }
-        return false;
-    }
+    };
 
+    GameObjectAI* GetAI(GameObject* go) const override
+    {
+        return GetRazorfenDownsAI<go_gongAI>(go);
+    }
 };
 
 void AddSC_razorfen_downs()

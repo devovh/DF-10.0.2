@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -69,11 +69,11 @@ public:
             Initialize();
         }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override { }
 
         void SummonAdds(Unit* victim)
         {
-            if (Creature* Add = DoSpawnCreature(13456, float(irand(-7, 7)), float(irand(-7, 7)), 0, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 90000))
+            if (Creature* Add = DoSpawnCreature(13456, float(irand(-7, 7)), float(irand(-7, 7)), 0, 0, TEMPSUMMON_TIMED_OR_CORPSE_DESPAWN, 90s))
                 Add->AI()->AttackStart(victim);
         }
 
@@ -82,8 +82,8 @@ public:
             if (Invisible && InvisibleTimer <= diff)
             {
                 //Become visible again
-                me->SetFaction(14);
-                me->RemoveUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                me->SetFaction(FACTION_MONSTER);
+                me->RemoveUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
                 //Noxxion model
                 me->SetDisplayId(11172);
                 Invisible = false;
@@ -122,8 +122,8 @@ public:
                 //Interrupt any spell casting
                 //me->m_canMove = true;
                 me->InterruptNonMeleeSpells(false);
-                me->SetFaction(35);
-                me->AddUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                me->SetFaction(FACTION_FRIENDLY);
+                me->SetUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
                 // Invisible Model
                 me->SetDisplayId(11686);
                 SummonAdds(me->GetVictim());

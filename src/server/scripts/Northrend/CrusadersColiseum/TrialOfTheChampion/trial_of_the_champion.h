@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -21,14 +21,15 @@
 #include "CreatureAIImpl.h"
 
 #define ToCScriptName "instance_trial_of_the_champion"
-#define DataHeader "TC"
+#define DataHeader "TCv0.1"
 
 enum TCData
 {
-    BOSS_GRAND_CHAMPIONS,
-    BOSS_ARGENT_CHALLENGE_E,
-    BOSS_ARGENT_CHALLENGE_P,
-    BOSS_BLACK_KNIGHT,
+    BOSS_GRAND_CHAMPIONS    = 0,
+    BOSS_ARGENT_CHALLENGE_E = 1,
+    BOSS_ARGENT_CHALLENGE_P = 2,
+    BOSS_BLACK_KNIGHT       = 3,
+
     DATA_MOVEMENT_DONE,
     DATA_LESSER_CHAMPIONS_DEFEATED,
     DATA_START,
@@ -129,10 +130,10 @@ enum TCVehicles
     VEHICLE_BLACK_KNIGHT                            = 35491
 };
 
-template<class AI>
-inline AI* GetTrialOfTheChampionAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetTrialOfTheChampionAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, ToCScriptName);
+    return GetInstanceAI<AI>(obj, ToCScriptName);
 }
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -23,9 +23,13 @@
 #include "nexus.h"
 #include "Player.h"
 
-enum Factions
+DungeonEncounterData const encounters[] =
 {
-    FACTION_HOSTILE_FOR_ALL                       = 16
+    { DATA_COMMANDER, {{ 519 }} },
+    { DATA_MAGUS_TELESTRA, {{ 520, 521, 2010 }} },
+    { DATA_ANOMALUS, {{ 522, 523, 2009 }} },
+    { DATA_ORMOROK, {{ 524, 525, 2012 }} },
+    { DATA_KERISTRASZA, {{ 526, 527, 2011 }} }
 };
 
 class instance_nexus : public InstanceMapScript
@@ -39,6 +43,7 @@ class instance_nexus : public InstanceMapScript
             {
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
+                LoadDungeonEncounterData(encounters);
                 _teamInInstance = 0;
             }
 
@@ -58,39 +63,44 @@ class instance_nexus : public InstanceMapScript
                     case NPC_KERISTRASZA:
                         KeristraszaGUID = creature->GetGUID();
                         break;
-                    // Alliance npcs are spawned by default, if you are alliance, you will fight against horde npcs.
                     case NPC_ALLIANCE_BERSERKER:
-                        if (ServerAllowsTwoSideGroups())
-                            creature->SetFaction(FACTION_HOSTILE_FOR_ALL);
-                        if (_teamInInstance == ALLIANCE)
-                            creature->UpdateEntry(NPC_HORDE_BERSERKER);
-                        break;
                     case NPC_ALLIANCE_RANGER:
-                        if (ServerAllowsTwoSideGroups())
-                            creature->SetFaction(FACTION_HOSTILE_FOR_ALL);
-                        if (_teamInInstance == ALLIANCE)
-                            creature->UpdateEntry(NPC_HORDE_RANGER);
-                        break;
                     case NPC_ALLIANCE_CLERIC:
-                        if (ServerAllowsTwoSideGroups())
-                            creature->SetFaction(FACTION_HOSTILE_FOR_ALL);
-                        if (_teamInInstance == ALLIANCE)
-                            creature->UpdateEntry(NPC_HORDE_CLERIC);
-                        break;
                     case NPC_ALLIANCE_COMMANDER:
-                        if (ServerAllowsTwoSideGroups())
-                            creature->SetFaction(FACTION_HOSTILE_FOR_ALL);
-                        if (_teamInInstance == ALLIANCE)
-                            creature->UpdateEntry(NPC_HORDE_COMMANDER);
-                        break;
                     case NPC_COMMANDER_STOUTBEARD:
                         if (ServerAllowsTwoSideGroups())
-                            creature->SetFaction(FACTION_HOSTILE_FOR_ALL);
-                        if (_teamInInstance == ALLIANCE)
-                            creature->UpdateEntry(NPC_COMMANDER_KOLURG);
+                            creature->SetFaction(FACTION_MONSTER_2);
                         break;
                     default:
                         break;
+                }
+            }
+
+            uint32 GetCreatureEntry(ObjectGuid::LowType /*guidLow*/, CreatureData const* data) override
+            {
+                if (!_teamInInstance)
+                {
+                    Map::PlayerList const& players = instance->GetPlayers();
+                    if (!players.isEmpty())
+                        if (Player* player = players.begin()->GetSource())
+                            _teamInInstance = player->GetTeam();
+                }
+
+                uint32 entry = data->id;
+                switch (entry)
+                {
+                    case NPC_ALLIANCE_BERSERKER:
+                        return _teamInInstance == ALLIANCE ? NPC_HORDE_BERSERKER : NPC_ALLIANCE_BERSERKER;
+                    case NPC_ALLIANCE_RANGER:
+                        return _teamInInstance == ALLIANCE ? NPC_HORDE_RANGER : NPC_ALLIANCE_RANGER;
+                    case NPC_ALLIANCE_CLERIC:
+                        return _teamInInstance == ALLIANCE ? NPC_HORDE_CLERIC : NPC_ALLIANCE_CLERIC;
+                    case NPC_ALLIANCE_COMMANDER:
+                        return _teamInInstance == ALLIANCE ? NPC_HORDE_COMMANDER : NPC_ALLIANCE_COMMANDER;
+                    case NPC_COMMANDER_STOUTBEARD:
+                        return _teamInInstance == ALLIANCE ? NPC_COMMANDER_KOLURG : NPC_COMMANDER_STOUTBEARD;
+                    default:
+                        return entry;
                 }
             }
 
@@ -98,17 +108,17 @@ class instance_nexus : public InstanceMapScript
             {
                 switch (go->GetEntry())
                 {
-                    case GO_ANOMALUS_CONTAINMET_SPHERE:
+                    case GO_ANOMALUS_CONTAINMENT_SPHERE:
                         AnomalusContainmentSphere = go->GetGUID();
                         if (GetBossState(DATA_ANOMALUS) == DONE)
                             go->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
                         break;
-                    case GO_ORMOROKS_CONTAINMET_SPHERE:
+                    case GO_ORMOROKS_CONTAINMENT_SPHERE:
                         OrmoroksContainmentSphere = go->GetGUID();
                         if (GetBossState(DATA_ORMOROK) == DONE)
                             go->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
                         break;
-                    case GO_TELESTRAS_CONTAINMET_SPHERE:
+                    case GO_TELESTRAS_CONTAINMENT_SPHERE:
                         TelestrasContainmentSphere = go->GetGUID();
                         if (GetBossState(DATA_MAGUS_TELESTRA) == DONE)
                             go->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
@@ -161,11 +171,11 @@ class instance_nexus : public InstanceMapScript
                         return AnomalusGUID;
                     case DATA_KERISTRASZA:
                         return KeristraszaGUID;
-                    case ANOMALUS_CONTAINMET_SPHERE:
+                    case ANOMALUS_CONTAINMENT_SPHERE:
                         return AnomalusContainmentSphere;
-                    case ORMOROKS_CONTAINMET_SPHERE:
+                    case ORMOROKS_CONTAINMENT_SPHERE:
                         return OrmoroksContainmentSphere;
-                    case TELESTRAS_CONTAINMET_SPHERE:
+                    case TELESTRAS_CONTAINMENT_SPHERE:
                         return TelestrasContainmentSphere;
                     default:
                         break;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -25,7 +25,6 @@ EndScriptData */
 #include "ScriptMgr.h"
 #include "InstanceScript.h"
 #include "MotionMaster.h"
-#include "ObjectAccessor.h"
 #include "ScriptedCreature.h"
 #include "SpellInfo.h"
 #include "temple_of_ahnqiraj.h"
@@ -63,14 +62,11 @@ enum Misc
     TELEPORTTIME                  = 30000
 };
 
-
-
-struct boss_twinemperorsAI : public ScriptedAI
+struct boss_twinemperorsAI : public BossAI
 {
-    boss_twinemperorsAI(Creature* creature): ScriptedAI(creature)
+    boss_twinemperorsAI(Creature* creature): BossAI(creature, DATA_TWIN_EMPERORS)
     {
         Initialize();
-        instance = creature->GetInstanceScript();
     }
 
     void Initialize()
@@ -86,8 +82,6 @@ struct boss_twinemperorsAI : public ScriptedAI
         DontYellWhenDead = false;
         EnrageTimer = 15 * 60000;
     }
-
-    InstanceScript* instance;
 
     uint32 Heal_Timer;
     uint32 Teleport_Timer;
@@ -106,14 +100,15 @@ struct boss_twinemperorsAI : public ScriptedAI
     {
         Initialize();
         me->ClearUnitState(UNIT_STATE_STUNNED);
+        _Reset();
     }
 
     Creature* GetOtherBoss()
     {
-        return ObjectAccessor::GetCreature(*me, instance->GetGuidData(IAmVeklor() ? DATA_VEKNILASH : DATA_VEKLOR));
+        return instance->GetCreature(IAmVeklor() ? DATA_VEKNILASH : DATA_VEKLOR);
     }
 
-    void DamageTaken(Unit* /*done_by*/, uint32 &damage) override
+    void DamageTaken(Unit* /*done_by*/, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override
     {
         Unit* pOtherBoss = GetOtherBoss();
         if (pOtherBoss)
@@ -125,7 +120,7 @@ struct boss_twinemperorsAI : public ScriptedAI
             if (ohealth <= 0)
             {
                 pOtherBoss->setDeathState(JUST_DIED);
-                pOtherBoss->AddDynamicFlag(UNIT_DYNFLAG_LOOTABLE);
+                pOtherBoss->SetDynamicFlag(UNIT_DYNFLAG_LOOTABLE);
             }
         }
     }
@@ -137,11 +132,12 @@ struct boss_twinemperorsAI : public ScriptedAI
         {
             pOtherBoss->SetHealth(0);
             pOtherBoss->setDeathState(JUST_DIED);
-            pOtherBoss->AddDynamicFlag(UNIT_DYNFLAG_LOOTABLE);
+            pOtherBoss->SetDynamicFlag(UNIT_DYNFLAG_LOOTABLE);
             ENSURE_AI(boss_twinemperorsAI, pOtherBoss->AI())->DontYellWhenDead = true;
         }
         if (!DontYellWhenDead)                              // I hope AI is not threaded
             DoPlaySoundToSet(me, IAmVeklor() ? SOUND_VL_DEATH : SOUND_VN_DEATH);
+        _JustDied();
     }
 
     void KilledUnit(Unit* /*victim*/) override
@@ -149,9 +145,9 @@ struct boss_twinemperorsAI : public ScriptedAI
         DoPlaySoundToSet(me, IAmVeklor() ? SOUND_VL_KILL : SOUND_VN_KILL);
     }
 
-    void EnterCombat(Unit* who) override
+    void JustEngagedWith(Unit* who) override
     {
-        DoZoneInCombat();
+        BossAI::JustEngagedWith(who);
         Creature* pOtherBoss = GetOtherBoss();
         if (pOtherBoss)
         {
@@ -167,13 +163,13 @@ struct boss_twinemperorsAI : public ScriptedAI
         }
     }
 
-    void SpellHit(Unit* caster, const SpellInfo* entry) override
+    void SpellHit(WorldObject* caster, SpellInfo const* spellInfo) override
     {
         if (caster == me)
             return;
 
         Creature* pOtherBoss = GetOtherBoss();
-        if (entry->Id != SPELL_HEAL_BROTHER || !pOtherBoss)
+        if (spellInfo->Id != SPELL_HEAL_BROTHER || !pOtherBoss)
             return;
 
         // add health so we keep same percentage for both brothers
@@ -222,13 +218,13 @@ struct boss_twinemperorsAI : public ScriptedAI
         Creature* pOtherBoss = GetOtherBoss();
         if (pOtherBoss)
         {
-            //me->Yell("Teleporting ...", LANG_UNIVERSAL, 0);
+            //me->MonsterYell("Teleporting ...", LANG_UNIVERSAL, 0);
             Position thisPos;
             thisPos.Relocate(me);
             Position otherPos;
             otherPos.Relocate(pOtherBoss);
-            pOtherBoss->SetPosition(thisPos);
-            me->SetPosition(otherPos);
+            pOtherBoss->UpdatePosition(thisPos);
+            me->UpdatePosition(otherPos);
 
             SetAfterTeleport();
             ENSURE_AI(boss_twinemperorsAI, pOtherBoss->AI())->SetAfterTeleport();
@@ -239,7 +235,7 @@ struct boss_twinemperorsAI : public ScriptedAI
     {
         me->InterruptNonMeleeSpells(false);
         DoStopAttack();
-        DoResetThreat();
+        ResetThreatList();
         DoCast(me, SPELL_TWIN_TELEPORT_VISUAL);
         me->AddUnitState(UNIT_STATE_STUNNED);
         AfterTeleport = true;
@@ -268,7 +264,7 @@ struct boss_twinemperorsAI : public ScriptedAI
                 {
                     //DoYell(nearu->GetName(), LANG_UNIVERSAL, 0);
                     AttackStart(nearu);
-                    me->AddThreat(nearu, 10000);
+                    AddThreat(nearu, 10000);
                 }
                 return true;
             }
@@ -332,7 +328,7 @@ struct boss_twinemperorsAI : public ScriptedAI
                 if (c->isDead())
                 {
                     c->Respawn();
-                    c->SetFaction(7);
+                    c->SetFaction(FACTION_CREATURE);
                     c->RemoveAllAuras();
                 }
                 if (c->IsWithinDistInMap(me, ABUSE_BUG_RANGE))
@@ -382,9 +378,13 @@ struct boss_twinemperorsAI : public ScriptedAI
             if (!me->IsNonMeleeSpellCast(true))
             {
                 DoCast(me, SPELL_BERSERK);
-                EnrageTimer = 60*60000;
-            } else EnrageTimer = 0;
-        } else EnrageTimer-=diff;
+                EnrageTimer = 60 * 60000;
+            }
+            else
+                EnrageTimer = 0;
+        }
+        else
+            EnrageTimer -= diff;
     }
 };
 
@@ -421,14 +421,12 @@ public:
         {
             TwinReset();
             Initialize();
-                                                                //Added. Can be removed if its included in DB.
-            me->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_MASK_MAGIC, true);
         }
 
         void CastSpellOnBug(Creature* target) override
         {
-            target->SetFaction(14);
-            target->AI()->AttackStart(me->getThreatManager().getHostilTarget());
+            target->SetFaction(FACTION_MONSTER);
+            target->AI()->AttackStart(me->GetThreatManager().GetCurrentVictim());
             target->AddAura(SPELL_MUTATE_BUG, target);
             target->SetFullHealth();
         }
@@ -451,7 +449,7 @@ public:
 
             if (UpperCut_Timer <= diff)
             {
-                Unit* randomMelee = SelectTarget(SELECT_TARGET_RANDOM, 0, NOMINAL_MELEE_RANGE, true);
+                Unit* randomMelee = SelectTarget(SelectTargetMethod::Random, 0, NOMINAL_MELEE_RANGE, true);
                 if (randomMelee)
                     DoCast(randomMelee, SPELL_UPPERCUT);
                 UpperCut_Timer = 15000 + rand32() % 15000;
@@ -511,14 +509,11 @@ public:
         {
             TwinReset();
             Initialize();
-
-            //Added. Can be removed if its included in DB.
-            me->ApplySpellImmune(0, IMMUNITY_DAMAGE, SPELL_SCHOOL_MASK_NORMAL, true);
         }
 
         void CastSpellOnBug(Creature* target) override
         {
-            target->SetFaction(14);
+            target->SetFaction(FACTION_MONSTER);
             target->AddAura(SPELL_EXPLODEBUG, target);
             target->SetFullHealth();
         }
@@ -541,7 +536,7 @@ public:
             if (ShadowBolt_Timer <= diff)
             {
                 if (!me->IsWithinDist(me->GetVictim(), 45.0f))
-                    me->GetMotionMaster()->MoveChase(me->GetVictim(), VEKLOR_DIST, 0);
+                    me->GetMotionMaster()->MoveChase(me->GetVictim(), VEKLOR_DIST);
                 else
                     DoCastVictim(SPELL_SHADOWBOLT);
                 ShadowBolt_Timer = 2000;
@@ -550,16 +545,14 @@ public:
             //Blizzard_Timer
             if (Blizzard_Timer <= diff)
             {
-                Unit* target = nullptr;
-                target = SelectTarget(SELECT_TARGET_RANDOM, 0, 45, true);
-                if (target)
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 45, true))
                     DoCast(target, SPELL_BLIZZARD);
                 Blizzard_Timer = 15000 + rand32() % 15000;
             } else Blizzard_Timer -= diff;
 
             if (ArcaneBurst_Timer <= diff)
             {
-                if (Unit* mvic = SelectTarget(SELECT_TARGET_NEAREST, 0, NOMINAL_MELEE_RANGE, true))
+                if (Unit* mvic = SelectTarget(SelectTargetMethod::MinDistance, 0, NOMINAL_MELEE_RANGE, true))
                 {
                     DoCast(mvic, SPELL_ARCANEBURST);
                     ArcaneBurst_Timer = 5000;
@@ -593,8 +586,8 @@ public:
                 // VL doesn't melee
                 if (me->Attack(who, false))
                 {
-                    me->GetMotionMaster()->MoveChase(who, VEKLOR_DIST, 0);
-                    me->AddThreat(who, 0.0f);
+                    me->GetMotionMaster()->MoveChase(who, VEKLOR_DIST);
+                    AddThreat(who, 0.0f);
                 }
             }
         }

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -17,15 +17,14 @@
 
 #include "ScriptMgr.h"
 #include "AreaBoundary.h"
-#include "Creature.h"
 #include "CreatureAI.h"
 #include "EventMap.h"
 #include "GameObject.h"
 #include "InstanceScript.h"
 #include "Map.h"
-#include "MotionMaster.h"
 #include "naxxramas.h"
 #include "TemporarySummon.h"
+#include <sstream>
 
 BossBoundaryData const boundaries =
 {
@@ -43,7 +42,7 @@ BossBoundaryData const boundaries =
     /* Military Quarter */
     { BOSS_RAZUVIOUS, new ZRangeBoundary(260.0f, 287.0f) }, // will not chase onto the upper floor
     { BOSS_GOTHIK, new RectangleBoundary(2627.0f, 2764.0f, -3440.0f, -3275.0f) },
-    { BOSS_HORSEMEN, new ParallelogramBoundary(AreaBoundary::DoublePosition(2646.0, -2959.0), AreaBoundary::DoublePosition(2529.0, -3075.0), AreaBoundary::DoublePosition(2506.0, -2854.0)) },
+    { BOSS_HORSEMEN, new ParallelogramBoundary(Position(2646.0f, -2959.0f), Position(2529.0f, -3075.0f), Position(2506.0f, -2854.0f)) },
 
     /* Construct Quarter */
     { BOSS_PATCHWERK, new CircleBoundary(Position(3204.0f, -3241.4f), 240.0f) },
@@ -51,9 +50,9 @@ BossBoundaryData const boundaries =
     { BOSS_GROBBULUS, new CircleBoundary(Position(3204.0f, -3241.4f), 240.0f) },
     { BOSS_GROBBULUS, new RectangleBoundary(3295.0f, 3340.0f, -3254.2f, -3230.18f, true) }, // entrance door blocker
     { BOSS_GLUTH, new CircleBoundary(Position(3293.0f, -3142.0f), 80.0) },
-    { BOSS_GLUTH, new ParallelogramBoundary(AreaBoundary::DoublePosition(3401.0, -3149.0), AreaBoundary::DoublePosition(3261.0, -3028.0), AreaBoundary::DoublePosition(3320.0, -3267.0)) },
+    { BOSS_GLUTH, new ParallelogramBoundary(Position(3401.0f, -3149.0f), Position(3261.0f, -3028.0f), Position(3320.0f, -3267.0f)) },
     { BOSS_GLUTH, new ZRangeBoundary(285.0f, 310.0f) },
-    { BOSS_THADDIUS, new ParallelogramBoundary(AreaBoundary::DoublePosition(3478.3, -3070.0), AreaBoundary::DoublePosition(3370.0, -2961.5), AreaBoundary::DoublePosition(3580.0, -2961.5)) },
+    { BOSS_THADDIUS, new ParallelogramBoundary(Position(3478.3f, -3070.0f), Position(3370.0f, -2961.5f), Position(3580.0f, -2961.5f)) },
 
     /* Frostwyrm Lair */
     { BOSS_SAPPHIRON, new CircleBoundary(Position(3517.627f, -5255.5f), 110.0) },
@@ -108,6 +107,25 @@ ObjectData const objectData[] =
     { 0,                        0,                         }
 };
 
+DungeonEncounterData const encounters[] =
+{
+    { BOSS_ANUBREKHAN, {{ 1107 }} },
+    { BOSS_FAERLINA, {{  1110 }} },
+    { BOSS_MAEXXNA, {{ 1116 }} },
+    { BOSS_NOTH, {{ 1117 }} },
+    { BOSS_HEIGAN, {{ 1112 }} },
+    { BOSS_LOATHEB, {{ 1115 }} },
+    { BOSS_PATCHWERK, {{ 1118 }} },
+    { BOSS_GROBBULUS, {{ 1111 }} },
+    { BOSS_GLUTH, {{ 1108 }} },
+    { BOSS_THADDIUS, {{ 1120 }} },
+    { BOSS_RAZUVIOUS, {{ 1113 }} },
+    { BOSS_GOTHIK, {{ 1109 }} },
+    { BOSS_HORSEMEN, {{ 1121 }} },
+    { BOSS_SAPPHIRON, {{ 1119 }} },
+    { BOSS_KELTHUZAD, {{ 1114 }} }
+};
+
 class instance_naxxramas : public InstanceMapScript
 {
     public:
@@ -122,17 +140,10 @@ class instance_naxxramas : public InstanceMapScript
                 LoadBossBoundaries(boundaries);
                 LoadDoorData(doorData);
                 LoadObjectData(nullptr, objectData);
+                LoadDungeonEncounterData(encounters);
 
-                hadAnubRekhanGreet      = false;
-                hadFaerlinaGreet        = false;
-                hadThaddiusGreet        = false;
                 hadSapphironBirth       = false;
                 CurrentWingTaunt        = SAY_KELTHUZAD_FIRST_WING_TAUNT;
-
-                playerDied              = 0;
-
-                nextFroggerWave         = 0;
-                events.ScheduleEvent(EVENT_SUMMON_FROGGER_WAVE, Seconds(1));
             }
 
             void OnCreatureCreate(Creature* creature) override
@@ -257,12 +268,6 @@ class instance_naxxramas : public InstanceMapScript
 
             void OnUnitDeath(Unit* unit) override
             {
-                if (unit->GetTypeId() == TYPEID_PLAYER && IsEncounterInProgress())
-                {
-                    playerDied = 1;
-                    SaveToDB();
-                }
-
                 if (Creature* creature = unit->ToCreature())
                     if (creature->GetEntry() == NPC_BIGGLESWORTH)
                     {
@@ -281,15 +286,6 @@ class instance_naxxramas : public InstanceMapScript
                         if (GameObject* gate = instance->GetGameObject(GothikGateGUID))
                             gate->SetGoState(GOState(value));
                         break;
-                    case DATA_HAD_ANUBREKHAN_GREET:
-                        hadAnubRekhanGreet = (value == 1u);
-                        break;
-                    case DATA_HAD_FAERLINA_GREET:
-                        hadFaerlinaGreet = (value == 1u);
-                        break;
-                    case DATA_HAD_THADDIUS_GREET:
-                        hadThaddiusGreet = (value == 1u);
-                        break;
                     case DATA_HAD_SAPPHIRON_BIRTH:
                         hadSapphironBirth = (value == 1u);
                         break;
@@ -302,12 +298,6 @@ class instance_naxxramas : public InstanceMapScript
             {
                 switch (id)
                 {
-                    case DATA_HAD_ANUBREKHAN_GREET:
-                        return hadAnubRekhanGreet ? 1u : 0u;
-                    case DATA_HAD_FAERLINA_GREET:
-                        return hadFaerlinaGreet ? 1u : 0u;
-                    case DATA_HAD_THADDIUS_GREET:
-                        return hadThaddiusGreet ? 1u : 0u;
                     case DATA_HAD_SAPPHIRON_BIRTH:
                         return hadSapphironBirth ? 1u : 0u;
                     default:
@@ -381,7 +371,7 @@ class instance_naxxramas : public InstanceMapScript
                             if (GameObject* teleporter = GetGameObject(DATA_NAXX_PORTAL_ARACHNID))
                                 teleporter->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
 
-                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, Seconds(6));
+                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, 6s);
                         }
                         break;
                     case BOSS_LOATHEB:
@@ -390,7 +380,7 @@ class instance_naxxramas : public InstanceMapScript
                             if (GameObject* teleporter = GetGameObject(DATA_NAXX_PORTAL_PLAGUE))
                                 teleporter->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
 
-                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, Seconds(6));
+                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, 6s);
                         }
                         break;
                     case BOSS_THADDIUS:
@@ -399,12 +389,12 @@ class instance_naxxramas : public InstanceMapScript
                             if (GameObject* teleporter = GetGameObject(DATA_NAXX_PORTAL_CONSTRUCT))
                                 teleporter->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
 
-                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, Seconds(6));
+                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, 6s);
                         }
                         break;
                     case BOSS_GOTHIK:
                         if (state == DONE)
-                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_KORTHAZZ, Seconds(10));
+                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_KORTHAZZ, 10s);
                         break;
                     case BOSS_HORSEMEN:
                         if (state == DONE)
@@ -418,12 +408,12 @@ class instance_naxxramas : public InstanceMapScript
                             if (GameObject* teleporter = GetGameObject(DATA_NAXX_PORTAL_MILITARY))
                                 teleporter->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
 
-                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, Seconds(6));
+                            events.ScheduleEvent(EVENT_KELTHUZAD_WING_TAUNT, 6s);
                         }
                         break;
                     case BOSS_SAPPHIRON:
                         if (state == DONE)
-                            events.ScheduleEvent(EVENT_DIALOGUE_SAPPHIRON_KELTHUZAD, Seconds(6));
+                            events.ScheduleEvent(EVENT_DIALOGUE_SAPPHIRON_KELTHUZAD, 6s);
                         HandleGameObject(KelthuzadDoorGUID, false);
                         break;
                     case BOSS_KELTHUZAD:
@@ -449,17 +439,17 @@ class instance_naxxramas : public InstanceMapScript
                         case EVENT_DIALOGUE_GOTHIK_KORTHAZZ:
                             if (Creature* korthazz = instance->GetCreature(ThaneGUID))
                                 korthazz->AI()->Talk(SAY_DIALOGUE_GOTHIK_HORSEMAN);
-                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_ZELIEK, Seconds(5));
+                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_ZELIEK, 5s);
                             break;
                         case EVENT_DIALOGUE_GOTHIK_ZELIEK:
                             if (Creature* zeliek = instance->GetCreature(SirGUID))
                                 zeliek->AI()->Talk(SAY_DIALOGUE_GOTHIK_HORSEMAN);
-                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_BLAUMEUX, Seconds(6));
+                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_BLAUMEUX, 6s);
                             break;
                         case EVENT_DIALOGUE_GOTHIK_BLAUMEUX:
                             if (Creature* blaumeux = instance->GetCreature(LadyGUID))
                                 blaumeux->AI()->Talk(SAY_DIALOGUE_GOTHIK_HORSEMAN);
-                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_RIVENDARE, Seconds(6));
+                            events.ScheduleEvent(EVENT_DIALOGUE_GOTHIK_RIVENDARE, 6s);
                             break;
                         case EVENT_DIALOGUE_GOTHIK_RIVENDARE:
                             if (Creature* rivendare = instance->GetCreature(BaronGUID))
@@ -492,20 +482,10 @@ class instance_naxxramas : public InstanceMapScript
                                 kelthuzad->AI()->Talk(CurrentWingTaunt);
                             ++CurrentWingTaunt;
                             break;
-                        case EVENT_SUMMON_FROGGER_WAVE:
-                        {
-                            std::list<TempSummon*> spawns;
-                            instance->SummonCreatureGroup(nextFroggerWave, &spawns);
-                            if (!spawns.empty())
-                                (*spawns.begin())->GetMotionMaster()->MovePath(10 * NPC_FROGGER + nextFroggerWave, false);
-                            events.Repeat(Seconds(1) + Milliseconds(666));
-                            nextFroggerWave = (nextFroggerWave+1) % 3;
-                            break;
-                        }
                         case EVENT_DIALOGUE_SAPPHIRON_KELTHUZAD:
                             if (Creature* kelthuzad = instance->GetCreature(KelthuzadGUID))
                                 kelthuzad->AI()->Talk(SAY_DIALOGUE_SAPPHIRON_KELTHUZAD);
-                            events.ScheduleEvent(EVENT_DIALOGUE_SAPPHIRON_LICHKING, Seconds(6));
+                            events.ScheduleEvent(EVENT_DIALOGUE_SAPPHIRON_LICHKING, 6s);
                             break;
                         case EVENT_DIALOGUE_SAPPHIRON_LICHKING:
                             if (Creature* lichKing = instance->GetCreature(LichKingGUID))
@@ -576,8 +556,6 @@ class instance_naxxramas : public InstanceMapScript
                     case 13239: // Loatheb
                     case 13240: // Thaddius
                     case 7617:  // Kel'Thuzad
-                        if (AreAllEncountersDone() && !playerDied)
-                            return true;
                         return false;
                 }
 
@@ -625,16 +603,8 @@ class instance_naxxramas : public InstanceMapScript
             ObjectGuid PortalsGUID[4];
             ObjectGuid KelthuzadDoorGUID;
             ObjectGuid LichKingGUID;
-            bool hadAnubRekhanGreet;
-            bool hadFaerlinaGreet;
-            bool hadThaddiusGreet;
             bool hadSapphironBirth;
             uint8 CurrentWingTaunt;
-
-            /* The Immortal / The Undying */
-            uint32 playerDied;
-
-            int8 nextFroggerWave;
 
             EventMap events;
         };

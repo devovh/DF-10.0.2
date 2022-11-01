@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -57,7 +57,7 @@ public:
             _tapped = false;
         }
 
-        void SpellHit(Unit* caster, SpellInfo const* spell) override
+        void SpellHit(WorldObject* caster, SpellInfo const* spell) override
         {
             if (_tapped)
                 return;
@@ -68,7 +68,7 @@ public:
                 {
                     _tapped = true;
                     _playerGUID = caster->GetGUID();
-                    me->AddUnitFlag(UNIT_FLAG_IMMUNE_TO_NPC);
+                    me->SetUnitFlag(UNIT_FLAG_IMMUNE_TO_NPC);
                     me->SetStandState(UNIT_STAND_STATE_STAND);
                     _events.ScheduleEvent(EVENT_TURN_TO_PLAYER, Seconds(2));
                 }
@@ -151,7 +151,7 @@ public:
             me->SetHealth(me->CountPctFromMaxHealth(_percentHP));
         }
 
-        void SpellHit(Unit* caster, SpellInfo const* spell) override
+        void SpellHit(WorldObject* caster, SpellInfo const* spell) override
         {
             if (!_hitBySpell)
             {
@@ -272,7 +272,7 @@ public:
         {
             if (apply && passenger->GetTypeId() == TYPEID_PLAYER)
             {
-                if (Creature* milo = passenger->SummonCreature(NPC_MILO, me->GetPosition(), TEMPSUMMON_CORPSE_DESPAWN, 0))
+                if (Creature* milo = passenger->SummonCreature(NPC_MILO, me->GetPosition(), TEMPSUMMON_CORPSE_DESPAWN, 0s))
                 {
                     _waitBeforePath = false;
                     _miloGUID = milo->GetGUID();
@@ -380,13 +380,12 @@ public:
         void HandleForceCast(SpellEffIndex effIndex)
         {
             PreventHitDefaultEffect(effIndex);
-            GetHitUnit()->CastSpell(GetHitUnit(), GetSpellInfo()->GetEffect(effIndex)->TriggerSpell, true);
+            GetHitUnit()->CastSpell(GetHitUnit(), GetEffectInfo().TriggerSpell, true);
         }
 
         void Register() override
         {
             OnEffectHitTarget += SpellEffectFn(spell_a_trip_to_ironforge_quest_complete_SpellScript::HandleForceCast, EFFECT_0, SPELL_EFFECT_FORCE_CAST);
-            OnEffectHitTarget += SpellEffectFn(spell_a_trip_to_ironforge_quest_complete_SpellScript::HandleForceCast, EFFECT_1, SPELL_EFFECT_PLAY_SOUND);
         }
     };
 
@@ -413,7 +412,7 @@ public:
         void HandleForceCast(SpellEffIndex effIndex)
         {
             PreventHitDefaultEffect(effIndex);
-            GetHitUnit()->CastSpell(GetHitUnit(), GetSpellInfo()->GetEffect(effIndex)->TriggerSpell, true);
+            GetHitUnit()->CastSpell(GetHitUnit(), GetEffectInfo().TriggerSpell, true);
         }
 
         void Register() override
@@ -446,7 +445,7 @@ public:
         {
             if (Creature* target = GetHitCreature())
             {
-                target->setRegeneratingHealth(false);
+                target->SetRegenerateHealth(false);
                 target->SetHealth(target->CountPctFromMaxHealth(10));
             }
         }

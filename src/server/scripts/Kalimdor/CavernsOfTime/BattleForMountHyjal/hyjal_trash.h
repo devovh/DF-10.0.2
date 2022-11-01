@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -18,10 +18,9 @@
 #ifndef SC_HYJAL_TRASH_AI_H
 #define SC_HYJAL_TRASH_AI_H
 
-#include "hyjal.h"
 #include "ScriptedEscortAI.h"
 
-struct hyjal_trashAI : public npc_escortAI
+struct hyjal_trashAI : public EscortAI
 {
     hyjal_trashAI(Creature* creature);
 
@@ -29,7 +28,7 @@ struct hyjal_trashAI : public npc_escortAI
 
     void JustDied(Unit* /*killer*/) override;
 
-    void DamageTaken(Unit* done_by, uint32 &damage) override;
+    void DamageTaken(Unit* done_by, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override;
 
     public:
         InstanceScript* instance;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -15,7 +15,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
+#include "violet_hold.h"
 #include "Creature.h"
 #include "CreatureAI.h"
 #include "GameObject.h"
@@ -24,9 +24,8 @@
 #include "MotionMaster.h"
 #include "Player.h"
 #include "TaskScheduler.h"
+#include "ScriptMgr.h"
 #include "TemporarySummon.h"
-#include "WorldStatePackets.h"
-#include "violet_hold.h"
 
 /*
  * TODO:
@@ -190,6 +189,13 @@ MinionData const minionData[] =
     { 0,                0           } // END
 };
 
+DungeonEncounterData const encounters[] =
+{
+    { DATA_1ST_BOSS, {{ 2019 }} },
+    { DATA_2ND_BOSS, {{ 2018 }} },
+    { DATA_CYANIGOSA, {{ 2020 }} }
+};
+
 class instance_violet_hold : public InstanceMapScript
 {
     public:
@@ -197,15 +203,15 @@ class instance_violet_hold : public InstanceMapScript
 
         struct instance_violet_hold_InstanceMapScript : public InstanceScript
         {
-            instance_violet_hold_InstanceMapScript(InstanceMap* map) : InstanceScript(map)
+            instance_violet_hold_InstanceMapScript(InstanceMap* map) : InstanceScript(map),
+                FirstBossId(*this, "FirstBossId", 0),
+                SecondBossId(*this, "SecondBossId", 0)
             {
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
                 LoadObjectData(creatureData, gameObjectData);
                 LoadMinionData(minionData);
-
-                FirstBossId         = 0;
-                SecondBossId        = 0;
+                LoadDungeonEncounterData(encounters);
 
                 DoorIntegrity       = 100;
                 WaveCount           = 0;
@@ -290,13 +296,6 @@ class instance_violet_hold : public InstanceMapScript
                     default:
                         break;
                 }
-            }
-
-            void FillInitialWorldStates(WorldPackets::WorldState::InitWorldStates& data) override
-            {
-                data.Worldstates.emplace_back(uint32(WORLD_STATE_VH_SHOW), uint32(EventState == IN_PROGRESS ? 1 : 0));
-                data.Worldstates.emplace_back(uint32(WORLD_STATE_VH_PRISON_STATE), uint32(DoorIntegrity));
-                data.Worldstates.emplace_back(uint32(WORLD_STATE_VH_WAVE_COUNT), uint32(WaveCount));
             }
 
             bool CheckRequiredBosses(uint32 bossId, Player const* player = nullptr) const override
@@ -412,6 +411,12 @@ class instance_violet_hold : public InstanceMapScript
                             for (uint8 i = 0; i < ActivationCrystalCount; ++i)
                                 if (GameObject* crystal = instance->GetGameObject(ActivationCrystalGUIDs[i]))
                                     crystal->RemoveFlag(GO_FLAG_NOT_SELECTABLE);
+
+                            Scheduler.Schedule(Seconds(3), [this](TaskContext task)
+                            {
+                                CheckEventState();
+                                task.Repeat(Seconds(3));
+                            });
                         }
                         else if (data == NOT_STARTED)
                         {
@@ -427,7 +432,7 @@ class instance_violet_hold : public InstanceMapScript
 
                             for (uint8 i = 0; i < ActivationCrystalCount; ++i)
                                 if (GameObject* crystal = instance->GetGameObject(ActivationCrystalGUIDs[i]))
-                                    crystal->AddFlag(GO_FLAG_NOT_SELECTABLE);
+                                    crystal->SetFlag(GO_FLAG_NOT_SELECTABLE);
                         }
                         else if (data == DONE)
                         {
@@ -441,7 +446,7 @@ class instance_violet_hold : public InstanceMapScript
 
                             for (uint8 i = 0; i < ActivationCrystalCount; ++i)
                                 if (GameObject* crystal = instance->GetGameObject(ActivationCrystalGUIDs[i]))
-                                    crystal->AddFlag(GO_FLAG_NOT_SELECTABLE);
+                                    crystal->SetFlag(GO_FLAG_NOT_SELECTABLE);
 
                             if (Creature* sinclari = GetCreature(DATA_SINCLARI))
                                 sinclari->AI()->DoAction(ACTION_SINCLARI_OUTRO);
@@ -559,8 +564,8 @@ class instance_violet_hold : public InstanceMapScript
                                 {
                                     if (Creature* moragg = GetCreature(DATA_MORAGG))
                                     {
-                                        moragg->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
-                                        moragg->AI()->DoZoneInCombat(moragg, 200.0f);
+                                        moragg->SetImmuneToAll(false);
+                                        moragg->AI()->DoZoneInCombat(moragg);
                                     }
                                 });
                             });
@@ -592,13 +597,13 @@ class instance_violet_hold : public InstanceMapScript
                                         for (uint32 i = DATA_EREKEM_GUARD_1; i <= DATA_EREKEM_GUARD_2; ++i)
                                         {
                                             if (Creature* guard = instance->GetCreature(GetGuidData(i)))
-                                                guard->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
+                                                guard->SetImmuneToAll(false);
                                         }
 
                                         if (Creature* erekem = GetCreature(DATA_EREKEM))
                                         {
-                                            erekem->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
-                                            erekem->AI()->DoZoneInCombat(erekem, 200.0f);
+                                            erekem->SetImmuneToAll(false);
+                                            erekem->AI()->DoZoneInCombat(erekem);
                                         }
                                     });
                                 });
@@ -620,8 +625,8 @@ class instance_violet_hold : public InstanceMapScript
                                 {
                                     if (Creature* ichoron = GetCreature(DATA_ICHORON))
                                     {
-                                        ichoron->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
-                                        ichoron->AI()->DoZoneInCombat(ichoron, 200.0f);
+                                        ichoron->SetImmuneToAll(false);
+                                        ichoron->AI()->DoZoneInCombat(ichoron);
                                     }
                                 });
                             });
@@ -642,8 +647,8 @@ class instance_violet_hold : public InstanceMapScript
                                 {
                                     if (Creature* lavanthor = GetCreature(DATA_LAVANTHOR))
                                     {
-                                        lavanthor->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
-                                        lavanthor->AI()->DoZoneInCombat(lavanthor, 200.0f);
+                                        lavanthor->SetImmuneToAll(false);
+                                        lavanthor->AI()->DoZoneInCombat(lavanthor);
                                     }
                                 });
                             });
@@ -669,8 +674,8 @@ class instance_violet_hold : public InstanceMapScript
                                     {
                                         if (Creature* xevozz = GetCreature(DATA_XEVOZZ))
                                         {
-                                            xevozz->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
-                                            xevozz->AI()->DoZoneInCombat(xevozz, 200.0f);
+                                            xevozz->SetImmuneToAll(false);
+                                            xevozz->AI()->DoZoneInCombat(xevozz);
                                         }
                                     });
                                 });
@@ -695,8 +700,8 @@ class instance_violet_hold : public InstanceMapScript
                                 {
                                     if (Creature* zuramat = GetCreature(DATA_ZURAMAT))
                                     {
-                                        zuramat->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
-                                        zuramat->AI()->DoZoneInCombat(zuramat, 200.0f);
+                                        zuramat->SetImmuneToAll(false);
+                                        zuramat->AI()->DoZoneInCombat(zuramat);
                                     }
                                 });
                             });
@@ -735,10 +740,10 @@ class instance_violet_hold : public InstanceMapScript
                                     UpdateKilledBoss(guard);
 
                                 guard->GetMotionMaster()->MoveTargetedHome();
-                                guard->AddUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
+                                guard->SetImmuneToAll(true);
                             }
                         }
-                        // no break
+                        [[fallthrough]];
                     default:
                         if (boss->isDead())
                         {
@@ -748,7 +753,7 @@ class instance_violet_hold : public InstanceMapScript
                         }
 
                         boss->GetMotionMaster()->MoveTargetedHome();
-                        boss->AddUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
+                        boss->SetImmuneToAll(true);
                         break;
                 }
             }
@@ -764,7 +769,7 @@ class instance_violet_hold : public InstanceMapScript
                             FirstBossId = urand(DATA_MORAGG, DATA_ZURAMAT);
                         if (Creature* sinclari = GetCreature(DATA_SINCLARI))
                         {
-                            sinclari->SummonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[3], TEMPSUMMON_TIMED_DESPAWN, 3000);
+                            sinclari->SummonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[3], TEMPSUMMON_TIMED_DESPAWN, 3s);
                             sinclari->SummonCreature(NPC_SABOTEOUR, SaboteurSpawnLocation, TEMPSUMMON_DEAD_DESPAWN);
                         }
                         break;
@@ -776,14 +781,14 @@ class instance_violet_hold : public InstanceMapScript
                             } while (SecondBossId == FirstBossId);
                         if (Creature* sinclari = GetCreature(DATA_SINCLARI))
                         {
-                            sinclari->SummonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[3], TEMPSUMMON_TIMED_DESPAWN, 3000);
+                            sinclari->SummonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[3], TEMPSUMMON_TIMED_DESPAWN, 3s);
                             sinclari->SummonCreature(NPC_SABOTEOUR, SaboteurSpawnLocation, TEMPSUMMON_DEAD_DESPAWN);
                         }
                         break;
                     case 18:
                         if (Creature* sinclari = GetCreature(DATA_SINCLARI))
                         {
-                            sinclari->SummonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[4], TEMPSUMMON_TIMED_DESPAWN, 6000);
+                            sinclari->SummonCreature(NPC_TELEPORTATION_PORTAL_INTRO, PortalIntroPositions[4], TEMPSUMMON_TIMED_DESPAWN, 6s);
                             if (Creature* cyanigosa = sinclari->SummonCreature(NPC_CYANIGOSA, CyanigosaSpawnLocation, TEMPSUMMON_DEAD_DESPAWN))
                                 cyanigosa->CastSpell(cyanigosa, SPELL_CYANIGOSA_ARCANE_POWER_STATE, true);
                             ScheduleCyanigosaIntro();
@@ -793,17 +798,6 @@ class instance_violet_hold : public InstanceMapScript
                         SpawnPortal();
                         break;
                 }
-            }
-
-            void WriteSaveDataMore(std::ostringstream& data) override
-            {
-                data << FirstBossId << ' ' << SecondBossId;
-            }
-
-            void ReadSaveDataMore(std::istringstream& data) override
-            {
-                data >> FirstBossId;
-                data >> SecondBossId;
             }
 
             bool CheckWipe() const
@@ -854,9 +848,29 @@ class instance_violet_hold : public InstanceMapScript
 
             void Update(uint32 diff) override
             {
+                // if we don't have any player in the instance
                 if (!instance->HavePlayers())
+                {
+                    if (EventState == IN_PROGRESS) // if event is in progress, mark as fail
+                    {
+                        EventState = FAIL;
+                        CheckEventState();
+                    }
                     return;
+                }
 
+                Scheduler.Update(diff);
+
+                if (EventState == IN_PROGRESS)
+                {
+                    // if door is destroyed, event is failed
+                    if (!GetData(DATA_DOOR_INTEGRITY))
+                        EventState = FAIL;
+                }
+            }
+
+            void CheckEventState()
+            {
                 // if main event is in progress and players have wiped then reset instance
                 if ((EventState == IN_PROGRESS && CheckWipe()) || EventState == FAIL)
                 {
@@ -873,15 +887,6 @@ class instance_violet_hold : public InstanceMapScript
 
                     if (Creature* sinclari = GetCreature(DATA_SINCLARI))
                         sinclari->AI()->EnterEvadeMode();
-                }
-
-                Scheduler.Update(diff);
-
-                if (EventState == IN_PROGRESS)
-                {
-                    // if door is destroyed, event is failed
-                    if (!GetData(DATA_DOOR_INTEGRITY))
-                        EventState = FAIL;
                 }
             }
 
@@ -903,14 +908,14 @@ class instance_violet_hold : public InstanceMapScript
                             {
                                 cyanigosa->RemoveAurasDueToSpell(SPELL_CYANIGOSA_ARCANE_POWER_STATE);
                                 cyanigosa->CastSpell(cyanigosa, SPELL_CYANIGOSA_TRANSFORM, true);
-                                cyanigosa->RemoveUnitFlag(UnitFlags(UNIT_FLAG_IMMUNE_TO_PC | UNIT_FLAG_IMMUNE_TO_NPC));
+                                cyanigosa->SetImmuneToAll(false);
                             }
                         });
                     });
                 });
             }
 
-            void ProcessEvent(WorldObject* /*go*/, uint32 eventId) override
+            void ProcessEvent(WorldObject* /*go*/, uint32 eventId, WorldObject* /*invoker*/) override
             {
                 if (eventId == EVENT_ACTIVATE_CRYSTAL)
                 {
@@ -933,8 +938,8 @@ class instance_violet_hold : public InstanceMapScript
             static uint8 const ActivationCrystalCount = 5;
             ObjectGuid ActivationCrystalGUIDs[ActivationCrystalCount];
 
-            uint32 FirstBossId;
-            uint32 SecondBossId;
+            PersistentInstanceScriptValue<uint32> FirstBossId;
+            PersistentInstanceScriptValue<uint32> SecondBossId;
 
             uint8 DoorIntegrity;
             uint8 WaveCount;

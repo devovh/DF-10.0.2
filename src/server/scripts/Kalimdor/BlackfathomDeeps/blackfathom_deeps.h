@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -21,7 +21,7 @@
 #include "CreatureAIImpl.h"
 
 #define BFDScriptName "instance_blackfathom_deeps"
-#define DataHeader "BFD"
+#define DataHeader "BFDv1"
 
 uint32 const EncounterCount = 3;
 
@@ -70,10 +70,13 @@ enum BFDGameObjectIds
     GO_ALTAR_OF_THE_DEEPS                                  = 103016
 };
 
-template<typename AI>
-inline AI* GetBlackfathomDeepsAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetBlackfathomDeepsAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, BFDScriptName);
+    return GetInstanceAI<AI>(obj, BFDScriptName);
 }
+
+#define RegisterBlackfathomDeepsCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetBlackfathomDeepsAI)
+#define RegisterBlackfathomDeepsGameObjectAI(ai_name) RegisterGameObjectAIWithFactory(ai_name, GetBlackfathomDeepsAI)
 
 #endif // BFD_H_

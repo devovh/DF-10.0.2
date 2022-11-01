@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -50,9 +50,9 @@ public:
             lasherClicked = false;
         }
 
-        void OnSpellClick(Unit* clicker, bool& result) override
+        void OnSpellClick(Unit* clicker, bool spellClickHandled) override
         {
-            if (!result)
+            if (!spellClickHandled)
                 return;
 
             if (roll_chance_i(CHANCE_HOSTILE))
@@ -63,13 +63,13 @@ public:
             }
             else
             {
-                me->AddUnitFlag(UNIT_FLAG_NOT_SELECTABLE);
+                me->SetUnitFlag(UNIT_FLAG_UNINTERACTIBLE);
             }
 
             me->RemoveNpcFlag(UNIT_NPC_FLAG_SPELLCLICK);
             me->CastSpell(me, SPELL_STAND);
             me->GetMotionMaster()->MoveRandom(8.0f);
-            events.ScheduleEvent(EVENT_CHECK_OOC, 20000);
+            events.ScheduleEvent(EVENT_CHECK_OOC, 20s);
             lasherClicked = true;
 
             if (Player* player = clicker->ToPlayer())
@@ -91,7 +91,7 @@ public:
                     if (!me->IsInCombat())
                         me->DespawnOrUnsummon();
                     else
-                        events.ScheduleEvent(EVENT_CHECK_OOC, 5000);
+                        events.ScheduleEvent(EVENT_CHECK_OOC, 5s);
                     break;
                 }
             }
@@ -215,7 +215,8 @@ public: spell_beesbees() : SpellScriptLoader("spell_beesbees") { }
 enum RuumbosSillyDance
 {
     NPC_DRIZZLE  = 47556,
-    NPC_FERLI    = 47558
+    NPC_FERLI    = 47558,
+    MAP_KALIMDOR = 1
 };
 
 Position const DrizzleSpawnPos = { 3852.52f, -1321.92f, 213.3353f, 5.72468f };
@@ -237,8 +238,8 @@ public: spell_ruumbos_silly_dance() : SpellScriptLoader("spell_ruumbos_silly_dan
 
                     if (player->GetMapId() == MAP_KALIMDOR)
                     {
-                        player->SummonCreature(NPC_DRIZZLE, DrizzleSpawnPos, TEMPSUMMON_TIMED_DESPAWN, 20000);
-                        player->SummonCreature(NPC_FERLI, FerliSpawnPos, TEMPSUMMON_TIMED_DESPAWN, 20000);
+                        player->SummonCreature(NPC_DRIZZLE, DrizzleSpawnPos, TEMPSUMMON_TIMED_DESPAWN, 20s);
+                        player->SummonCreature(NPC_FERLI, FerliSpawnPos, TEMPSUMMON_TIMED_DESPAWN, 20s);
                     }
                 }
             }

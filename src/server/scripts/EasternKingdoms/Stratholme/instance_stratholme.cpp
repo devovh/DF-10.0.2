@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -23,24 +23,39 @@ SDCategory: Stratholme
 EndScriptData */
 
 #include "ScriptMgr.h"
+#include "AreaBoundary.h"
 #include "Creature.h"
+#include "CreatureAI.h"
 #include "EventMap.h"
 #include "GameObject.h"
 #include "InstanceScript.h"
 #include "Log.h"
 #include "Map.h"
+#include "MotionMaster.h"
 #include "Player.h"
 #include "stratholme.h"
-
-enum Misc
-{
-    MAX_ENCOUNTER           = 6
-};
 
 enum InstanceEvents
 {
     EVENT_BARON_RUN         = 1,
     EVENT_SLAUGHTER_SQUARE  = 2
+};
+
+enum StratholmeMisc
+{
+    SAY_YSIDA_SAVED         = 0
+};
+
+Position const timmyTheCruelSpawnPosition = { 3625.358f, -3188.108f, 130.3985f, 4.834562f };
+EllipseBoundary const beforeScarletGate(Position(3671.158f, -3181.79f), 60.0f, 40.0f);
+
+DungeonEncounterData const encounters[] =
+{
+    { 1, {{ 479 }} }, // Baroness Anastari
+    { 2, {{ 480 }} }, // Nerub'enkan
+    { 3, {{ 481 }} }, // Maleki the Pallid
+    { 4, {{ 483 }} }, // Ramstein the Gorger
+    { 5, {{ 484 }} }  // Lord Aurius Rivendare
 };
 
 class instance_stratholme : public InstanceMapScript
@@ -53,16 +68,20 @@ class instance_stratholme : public InstanceMapScript
             instance_stratholme_InstanceMapScript(InstanceMap* map) : InstanceScript(map)
             {
                 SetHeaders(DataHeader);
-                for (uint8 i = 0; i < MAX_ENCOUNTER; ++i)
-                    EncounterState[i] = NOT_STARTED;
+                SetBossNumber(MAX_ENCOUNTER);
+                LoadDungeonEncounterData(encounters);
 
                 for (uint8 i = 0; i < 5; ++i)
                     IsSilverHandDead[i] = false;
+
+                timmySpawned = false;
+                scarletsKilled = 0;
             }
 
-            uint32 EncounterState[MAX_ENCOUNTER];
+            uint8 scarletsKilled;
 
             bool IsSilverHandDead[5];
+            bool timmySpawned;
 
             ObjectGuid serviceEntranceGUID;
             ObjectGuid gauntletGate1GUID;
@@ -74,17 +93,46 @@ class instance_stratholme : public InstanceMapScript
             ObjectGuid portGauntletGUID;
             ObjectGuid portSlaugtherGUID;
             ObjectGuid portElderGUID;
+            ObjectGuid ysidaCageGUID;
 
             ObjectGuid baronGUID;
+            ObjectGuid ysidaGUID;
             ObjectGuid ysidaTriggerGUID;
             GuidSet crystalsGUID;
             GuidSet abomnationGUID;
             EventMap events;
 
+            void OnUnitDeath(Unit* who) override
+            {
+                switch (who->GetEntry())
+                {
+                    case NPC_CRIMSON_GUARDSMAN:
+                    case NPC_CRIMSON_CONJUROR:
+                    case NPC_CRIMSON_INITATE:
+                    case NPC_CRIMSON_GALLANT:
+                    {
+                        if (!timmySpawned)
+                        {
+                            Position pos = who->ToCreature()->GetHomePosition();
+                            // check if they're in front of the entrance
+                            if (beforeScarletGate.IsWithinBoundary(pos))
+                            {
+                                if (++scarletsKilled >= TIMMY_THE_CRUEL_CRUSADERS_REQUIRED)
+                                {
+                                    instance->SummonCreature(NPC_TIMMY_THE_CRUEL, timmyTheCruelSpawnPosition);
+                                    timmySpawned = true;
+                                }
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
+
             bool StartSlaugtherSquare()
             {
                 //change to DONE when crystals implemented
-                if (EncounterState[1] == IN_PROGRESS && EncounterState[2] == IN_PROGRESS && EncounterState[3] == IN_PROGRESS)
+                if (GetBossState(1) == IN_PROGRESS && GetBossState(2) == IN_PROGRESS && GetBossState(3) == IN_PROGRESS)
                 {
                     HandleGameObject(portGauntletGUID, true);
                     HandleGameObject(portSlaugtherGUID, true);
@@ -127,6 +175,10 @@ class instance_stratholme : public InstanceMapScript
                     case NPC_ABOM_VENOM:
                         abomnationGUID.insert(creature->GetGUID());
                         break;
+                    case NPC_YSIDA:
+                        ysidaGUID = creature->GetGUID();
+                        creature->RemoveNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
+                        break;
                 }
             }
 
@@ -153,7 +205,7 @@ class instance_stratholme : public InstanceMapScript
                         break;
                     case GO_GAUNTLET_GATE1:
                         //weird, but unless flag is set, client will not respond as expected. DB bug?
-                        go->AddFlag(GO_FLAG_LOCKED);
+                        go->SetFlag(GO_FLAG_LOCKED);
                         gauntletGate1GUID = go->GetGUID();
                         break;
                     case GO_ZIGGURAT1:
@@ -194,6 +246,9 @@ class instance_stratholme : public InstanceMapScript
                     case GO_PORT_ELDERS:
                         portElderGUID = go->GetGUID();
                         break;
+                    case GO_YSIDA_CAGE:
+                        ysidaCageGUID = go->GetGUID();
+                        break;
                 }
             }
 
@@ -205,29 +260,56 @@ class instance_stratholme : public InstanceMapScript
                         switch (data)
                         {
                             case IN_PROGRESS:
-                                if (EncounterState[0] == IN_PROGRESS || EncounterState[0] == FAIL)
+                                if (GetBossState(0) == IN_PROGRESS || GetBossState(0) == FAIL)
                                     break;
-                                EncounterState[0] = data;
-                                events.ScheduleEvent(EVENT_BARON_RUN, 2700000);
+                                SetBossState(0, EncounterState(data));
+                                events.ScheduleEvent(EVENT_BARON_RUN, 45min);
                                 TC_LOG_DEBUG("scripts", "Instance Stratholme: Baron run in progress.");
                                 break;
                             case FAIL:
                                 DoRemoveAurasDueToSpellOnPlayers(SPELL_BARON_ULTIMATUM);
-                                EncounterState[0] = data;
+                                if (Creature* ysida = instance->GetCreature(ysidaGUID))
+                                    ysida->CastSpell(ysida, SPELL_PERM_FEIGN_DEATH, true);
+                                SetBossState(0, EncounterState(data));
                                 break;
                             case DONE:
-                                EncounterState[0] = data;
-                                if (Creature* ysidaTrigger = instance->GetCreature(ysidaTriggerGUID))
+                                SetBossState(0, EncounterState(data));
+
+                                if (Creature* ysida = instance->GetCreature(ysidaGUID))
                                 {
-                                    Position ysidaPos = ysidaTrigger->GetPosition();
-                                    ysidaTrigger->SummonCreature(NPC_YSIDA, ysidaPos, TEMPSUMMON_TIMED_DESPAWN, 1800000);
+                                    if (GameObject* cage = instance->GetGameObject(ysidaCageGUID))
+                                        cage->UseDoorOrButton();
+
+                                    float x, y, z;
+                                    //! This spell handles the Dead man's plea quest completion
+                                    ysida->CastSpell(nullptr, SPELL_YSIDA_SAVED, true);
+                                    ysida->SetWalk(true);
+                                    ysida->AI()->Talk(SAY_YSIDA_SAVED);
+                                    ysida->SetNpcFlag(UNIT_NPC_FLAG_QUESTGIVER);
+                                    ysida->GetClosePoint(x, y, z, ysida->GetObjectScale() / 3, 4.0f);
+                                    ysida->GetMotionMaster()->MovePoint(1, x, y, z);
+
+                                    Map::PlayerList const& players = instance->GetPlayers();
+
+                                    for (auto const& i : players)
+                                    {
+                                        if (Player* player = i.GetSource())
+                                        {
+                                            if (player->IsGameMaster())
+                                                continue;
+
+                                            //! im not quite sure what this one is supposed to do
+                                            //! this is server-side spell
+                                            player->CastSpell(ysida, SPELL_YSIDA_CREDIT_EFFECT, true);
+                                        }
+                                    }
                                 }
                                 events.CancelEvent(EVENT_BARON_RUN);
                                 break;
                         }
                         break;
                     case TYPE_BARONESS:
-                        EncounterState[1] = data;
+                        SetBossState(1, EncounterState(data));
                         if (data == IN_PROGRESS)
                         {
                             HandleGameObject(ziggurat1GUID, true);
@@ -236,7 +318,7 @@ class instance_stratholme : public InstanceMapScript
                         }
                         break;
                     case TYPE_NERUB:
-                        EncounterState[2] = data;
+                        SetBossState(2, EncounterState(data));
                         if (data == IN_PROGRESS)
                         {
                             HandleGameObject(ziggurat2GUID, true);
@@ -245,7 +327,7 @@ class instance_stratholme : public InstanceMapScript
                         }
                         break;
                     case TYPE_PALLID:
-                        EncounterState[3] = data;
+                        SetBossState(3, EncounterState(data));
                         if (data == IN_PROGRESS)
                         {
                             HandleGameObject(ziggurat3GUID, true);
@@ -271,7 +353,7 @@ class instance_stratholme : public InstanceMapScript
                                 //a bit itchy, it should close the door after 10 secs, but it doesn't. skipping it for now.
                                 //UpdateGoState(ziggurat4GUID, 0, true);
                                 if (Creature* pBaron = instance->GetCreature(baronGUID))
-                                    pBaron->SummonCreature(NPC_RAMSTEIN, 4032.84f, -3390.24f, 119.73f, 4.71f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 1800000);
+                                    pBaron->SummonCreature(NPC_RAMSTEIN, 4032.84f, -3390.24f, 119.73f, 4.71f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 30min);
                                 TC_LOG_DEBUG("scripts", "Instance Stratholme: Ramstein spawned.");
                             }
                             else
@@ -283,10 +365,10 @@ class instance_stratholme : public InstanceMapScript
 
                         if (data == DONE)
                         {
-                            events.ScheduleEvent(EVENT_SLAUGHTER_SQUARE, 60000);
+                            events.ScheduleEvent(EVENT_SLAUGHTER_SQUARE, 1min);
                             TC_LOG_DEBUG("scripts", "Instance Stratholme: Slaugther event will continue in 1 minute.");
                         }
-                        EncounterState[4] = data;
+                        SetBossState(4, EncounterState(data));
                         break;
                     case TYPE_BARON:
                         if (data == IN_PROGRESS)
@@ -303,21 +385,11 @@ class instance_stratholme : public InstanceMapScript
                         {
                             HandleGameObject(portGauntletGUID, true);
                             if (GetData(TYPE_BARON_RUN) == IN_PROGRESS)
-                            {
                                 DoRemoveAurasDueToSpellOnPlayers(SPELL_BARON_ULTIMATUM);
-                                Map::PlayerList const& players = instance->GetPlayers();
-                                if (!players.isEmpty())
-                                    for (Map::PlayerList::const_iterator itr = players.begin(); itr != players.end(); ++itr)
-                                        if (Player* player = itr->GetSource())
-                                            if (player->GetQuestStatus(QUEST_DEAD_MAN_PLEA) == QUEST_STATUS_INCOMPLETE)
-                                            {
-                                                player->AreaExploredOrEventHappens(QUEST_DEAD_MAN_PLEA);
-                                                player->KilledMonsterCredit(NPC_YSIDA);
-                                            }
-                                SetData(TYPE_BARON_RUN, DONE);
-                            }
+
+                            SetData(TYPE_BARON_RUN, DONE);
                         }
-                        EncounterState[5] = data;
+                        SetBossState(5, EncounterState(data));
                         break;
                     case TYPE_SH_AELMAR:
                         IsSilverHandDead[0] = (data) ? true : false;
@@ -335,46 +407,6 @@ class instance_stratholme : public InstanceMapScript
                         IsSilverHandDead[4] = (data) ? true : false;
                         break;
                 }
-
-                if (data == DONE)
-                    SaveToDB();
-            }
-
-            std::string GetSaveData() override
-            {
-                OUT_SAVE_INST_DATA;
-
-                std::ostringstream saveStream;
-                saveStream << EncounterState[0] << ' ' << EncounterState[1] << ' ' << EncounterState[2] << ' '
-                    << EncounterState[3] << ' ' << EncounterState[4] << ' ' << EncounterState[5];
-
-                OUT_SAVE_INST_DATA_COMPLETE;
-                return saveStream.str();
-            }
-
-            void Load(const char* in) override
-            {
-                if (!in)
-                {
-                    OUT_LOAD_INST_DATA_FAIL;
-                    return;
-                }
-
-                OUT_LOAD_INST_DATA(in);
-
-                std::istringstream loadStream(in);
-                loadStream >> EncounterState[0] >> EncounterState[1] >> EncounterState[2] >> EncounterState[3]
-                >> EncounterState[4] >> EncounterState[5];
-
-                // Do not reset 1, 2 and 3. they are not set to done, yet .
-                if (EncounterState[0] == IN_PROGRESS)
-                    EncounterState[0] = NOT_STARTED;
-                if (EncounterState[4] == IN_PROGRESS)
-                    EncounterState[4] = NOT_STARTED;
-                if (EncounterState[5] == IN_PROGRESS)
-                    EncounterState[5] = NOT_STARTED;
-
-                OUT_LOAD_INST_DATA_COMPLETE;
             }
 
             uint32 GetData(uint32 type) const override
@@ -386,17 +418,17 @@ class instance_stratholme : public InstanceMapScript
                               return 1;
                           return 0;
                       case TYPE_BARON_RUN:
-                          return EncounterState[0];
+                          return GetBossState(0);
                       case TYPE_BARONESS:
-                          return EncounterState[1];
+                          return GetBossState(1);
                       case TYPE_NERUB:
-                          return EncounterState[2];
+                          return GetBossState(2);
                       case TYPE_PALLID:
-                          return EncounterState[3];
+                          return GetBossState(3);
                       case TYPE_RAMSTEIN:
-                          return EncounterState[4];
+                          return GetBossState(4);
                       case TYPE_BARON:
-                          return EncounterState[5];
+                          return GetBossState(5);
                   }
                   return 0;
             }
@@ -409,6 +441,8 @@ class instance_stratholme : public InstanceMapScript
                         return baronGUID;
                     case DATA_YSIDA_TRIGGER:
                         return ysidaTriggerGUID;
+                    case NPC_YSIDA:
+                        return ysidaGUID;
                 }
                 return ObjectGuid::Empty;
             }
@@ -430,7 +464,7 @@ class instance_stratholme : public InstanceMapScript
                             if (Creature* baron = instance->GetCreature(baronGUID))
                             {
                                 for (uint8 i = 0; i < 4; ++i)
-                                    baron->SummonCreature(NPC_BLACK_GUARD, 4032.84f, -3390.24f, 119.73f, 4.71f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 1800000);
+                                    baron->SummonCreature(NPC_BLACK_GUARD, 4032.84f, -3390.24f, 119.73f, 4.71f, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, 30min);
 
                                 HandleGameObject(ziggurat4GUID, true);
                                 HandleGameObject(ziggurat5GUID, true);

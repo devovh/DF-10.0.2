@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -23,7 +23,7 @@
 uint32 const EncounterCount         = 23;
 
 #define BRSScriptName "instance_blackrock_spire"
-#define DataHeader    "BRS"
+#define DataHeader    "BRSv1"
 
 enum BRSDataTypes
 {
@@ -51,7 +51,8 @@ enum BRSDataTypes
     DATA_HALL_RUNE_5                = 20,
     DATA_HALL_RUNE_6                = 21,
     DATA_HALL_RUNE_7                = 22,
-    DATA_SCARSHIELD_INFILTRATOR     = 23
+    DATA_SCARSHIELD_INFILTRATOR     = 23,
+    DATA_BLACKHAND_INCARCERATOR     = 24
 };
 
 enum BRSCreaturesIds
@@ -122,10 +123,12 @@ enum BRSGameObjectsIds
     GO_PORTCULLIS_TOBOSSROOMS       = 175186
 };
 
-template<typename AI>
-inline AI* GetBlackrockSpireAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetBlackrockSpireAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, BRSScriptName);
+    return GetInstanceAI<AI>(obj, BRSScriptName);
 }
+
+#define RegisterBlackrockSpireCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetBlackrockSpireAI)
 
 #endif

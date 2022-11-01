@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -28,6 +28,13 @@ EndScriptData */
 #include "InstanceScript.h"
 #include "Map.h"
 
+DungeonEncounterData const encounters[] =
+{
+    { DATA_WATCHKEEPER_GARGOLMAR, {{ 1893 }} },
+    { DATA_OMOR_THE_UNSCARRED, {{ 1891 }} },
+    { DATA_VAZRUDEN, {{ 1892 }} }
+};
+
 class instance_ramparts : public InstanceMapScript
 {
     public:
@@ -39,6 +46,7 @@ class instance_ramparts : public InstanceMapScript
             {
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
+                LoadDungeonEncounterData(encounters);
             }
 
             void OnGameObjectCreate(GameObject* go) override

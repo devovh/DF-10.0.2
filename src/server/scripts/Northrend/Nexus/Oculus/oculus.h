@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -107,10 +107,12 @@ enum OCMisc
     POINT_MOVE_OUT              = 1
 };
 
-template<typename AI>
-inline AI* GetOculusAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetOculusAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, OculusScriptName);
+    return GetInstanceAI<AI>(obj, OculusScriptName);
 }
+
+#define RegisterOculusCreatureAI(ai_name) RegisterCreatureAIWithFactory(ai_name, GetOculusAI)
 
 #endif // OCULUS_H_

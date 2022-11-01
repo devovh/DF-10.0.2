@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -22,14 +22,9 @@ SDComment:
 Script Data End */
 
 #include "ScriptMgr.h"
-#include "CombatAI.h"
-#include "Player.h"
 #include "ScriptedCreature.h"
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
-#include "SpellInfo.h"
-#include "SpellScript.h"
-#include "TemporarySummon.h"
 
 enum DumpyKeeshan
 {
@@ -69,9 +64,9 @@ public:
             });
         }
 
-        void DamageTaken(Unit* who, uint32& damage) override
+        void DamageTaken(Unit* who, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override
         {
-            if (who->GetTypeId() == TYPEID_UNIT && me->HealthBelowPctDamaged(82, damage))
+            if ((!who || who->GetTypeId() == TYPEID_UNIT) && me->HealthBelowPctDamaged(82, damage))
                 damage = 0;
         }
 
@@ -104,9 +99,9 @@ public:
     {
         npc_big_earlAI(Creature* creature) : ScriptedAI(creature) { }
 
-        void DamageTaken(Unit* who, uint32& damage) override
+        void DamageTaken(Unit* who, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override
         {
-            if (who->GetTypeId() == TYPEID_UNIT && me->HealthBelowPctDamaged(82, damage))
+            if ((!who || who->GetTypeId() == TYPEID_UNIT) && me->HealthBelowPctDamaged(82, damage))
                 damage = 0;
         }
 
@@ -279,27 +274,20 @@ enum RedridgeCitizen
     EVENT_SAY_TEXT                  = 9,     // Used by npc's in Lakeshire Townhall
     EVENT_LEAVE_TOWNHALL            = 10,    // Used by npc's in Lakeshire Townhall
 
-    EMOTE_ONESHOTCHEER              = 4,
-    EMOTE_ONESHOTROAR               = 15,
-    EMOTE_ONESHOTSHOT               = 22,
-    EMOTE_ONESHOTPOINT              = 25,
-    EMOTE_ONESHOTBATTLEROAR         = 53,
-    EMOTE_ONESHOTNO                 = 274,
-
     SAY_IN_TOWNHALL                 = 0,     // Used by npc's in Lakeshire Townhall
     SAY_LEAVE_TOWNHALL              = 1,     // Used by npc's in Lakeshire Townhall
 
     SPELL_APPLY_QUEST_INVIS_ZONE_19 = 82099  // Used by npc's in Lakeshire Townhall
 };
 
-const uint32 Emote[6] =
+const Emote EmoteID[6] =
 {
-    EMOTE_ONESHOTCHEER,
-    EMOTE_ONESHOTROAR,
-    EMOTE_ONESHOTSHOT,
-    EMOTE_ONESHOTPOINT,
-    EMOTE_ONESHOTBATTLEROAR,
-    EMOTE_ONESHOTNO
+    EMOTE_ONESHOT_CHEER,
+    EMOTE_ONESHOT_ROAR,
+    EMOTE_ONESHOT_SHOUT,
+    EMOTE_ONESHOT_POINT,
+    EMOTE_ONESHOT_BATTLE_ROAR,
+    EMOTE_ONESHOT_NO
 };
 
 uint32 const pathSize = 8;
@@ -347,7 +335,7 @@ public:
                             _events.ScheduleEvent(EVENT_SAY_TEXT, Seconds(5), Seconds(30));
                         break;
                     case EVENT_PLAYEMOTE:
-                        me->HandleEmoteCommand(Emote[urand(0, 5)]);
+                        me->HandleEmoteCommand(EmoteID[urand(0, 5)]);
                         _events.ScheduleEvent(EVENT_PLAYEMOTE, Seconds(10), Seconds(25));
                         break;
                     case EVENT_SAY_TEXT:
@@ -382,64 +370,10 @@ public:
     }
 };
 
-uint32 const pathSize2 = 2;
-Position const BoatPath[pathSize2] =
-{
-    { -9356.31f, -2414.29f, 69.6370f },
-    { -9425.49f, -2836.49f, 69.9875f },
-};
-
-struct npc_keeshan_riverboat : public VehicleAI
-{
-    npc_keeshan_riverboat(Creature* creature) : VehicleAI(creature) { }
-
-    void Reset() override
-    {
-        me->GetMotionMaster()->MoveSmoothPath(pathSize2, BoatPath, pathSize2, false, true);
-        me->DespawnOrUnsummon(Seconds(22), Seconds(60));
-    }
-};
-
-enum BlackrockTower
-{
-    QUEST_TO_WIN_A_WAR  = 26651,
-    NPC_BLACKROCK_TOWER = 43590,
-    NPC_MUNITIONS_DUMP  = 43589,
-};
-
-struct npc_blackrock_tower : public ScriptedAI
-{
-    npc_blackrock_tower(Creature* creature) : ScriptedAI(creature) {}
-
-    void MoveInLineOfSight(Unit* who) override
-    {
-        ScriptedAI::MoveInLineOfSight(who);
-
-        if (who->IsPlayer() && who->ToPlayer()->GetQuestStatus(QUEST_TO_WIN_A_WAR) == QUEST_STATUS_INCOMPLETE)
-            who->ToPlayer()->KilledMonsterCredit(NPC_BLACKROCK_TOWER);
-    }
-};
-
-struct npc_munitions_dump : public ScriptedAI
-{
-    npc_munitions_dump(Creature* creature) : ScriptedAI(creature) {}
-
-    void MoveInLineOfSight(Unit* who) override
-    {
-        ScriptedAI::MoveInLineOfSight(who);
-
-        if (who->IsPlayer() && who->ToPlayer()->GetQuestStatus(QUEST_TO_WIN_A_WAR) == QUEST_STATUS_INCOMPLETE)
-            who->ToPlayer()->KilledMonsterCredit(NPC_MUNITIONS_DUMP);
-    }
-};
-
 void AddSC_redridge_mountains()
 {
     new npc_big_earl();
     new npc_dumpy_and_keeshan();
     new npc_bridge_worker_alex();
     new npc_redridge_citizen();
-    RegisterCreatureAI(npc_keeshan_riverboat);
-    RegisterCreatureAI(npc_blackrock_tower);
-    RegisterCreatureAI(npc_munitions_dump);
 }

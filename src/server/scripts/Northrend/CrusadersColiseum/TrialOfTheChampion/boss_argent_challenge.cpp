@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -112,7 +112,7 @@ enum Spells
     SPELL_WAKING_NIGHTMARE_H    = 67677
 };
 
-class OrientationCheck : public std::unary_function<Unit*, bool>
+class OrientationCheck
 {
     public:
         explicit OrientationCheck(Unit* _caster) : caster(_caster) { }
@@ -125,6 +125,7 @@ class OrientationCheck : public std::unary_function<Unit*, bool>
         Unit* caster;
 };
 
+// 66862, 67681 - Radiance
 class spell_eadric_radiance : public SpellScriptLoader
 {
     public:
@@ -162,7 +163,7 @@ public:
             Initialize();
             instance = creature->GetInstanceScript();
             creature->SetReactState(REACT_PASSIVE);
-            creature->AddUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            creature->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
         }
 
         void Initialize()
@@ -189,13 +190,13 @@ public:
             Initialize();
         }
 
-        void DamageTaken(Unit* /*done_by*/, uint32 &damage) override
+        void DamageTaken(Unit* /*done_by*/, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override
         {
             if (damage >= me->GetHealth())
             {
                 damage = 0;
                 EnterEvadeMode();
-                me->SetFaction(35);
+                me->SetFaction(FACTION_FRIENDLY);
                 bDone = true;
             }
         }
@@ -205,7 +206,7 @@ public:
             if (MovementType != POINT_MOTION_TYPE)
                 return;
 
-            instance->SetData(BOSS_ARGENT_CHALLENGE_E, DONE);
+            instance->SetBossState(BOSS_ARGENT_CHALLENGE_E, DONE);
 
             me->DisappearAndDie();
         }
@@ -225,9 +226,9 @@ public:
             {
                 me->InterruptNonMeleeSpells(true);
 
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 250, true))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 250, true))
                 {
-                    if (target && target->IsAlive())
+                    if (target->IsAlive())
                     {
                         DoCast(target, SPELL_HAMMER_JUSTICE);
                         DoCast(target, SPELL_HAMMER_RIGHTEOUS);
@@ -273,7 +274,7 @@ public:
             instance = creature->GetInstanceScript();
 
             creature->SetReactState(REACT_PASSIVE);
-            creature->AddUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
+            creature->SetUnitFlag(UNIT_FLAG_NON_ATTACKABLE);
             creature->RestoreFaction();
         }
 
@@ -317,13 +318,13 @@ public:
                 me->RemoveAura(SPELL_SHIELD);
         }
 
-        void DamageTaken(Unit* /*done_by*/, uint32 &damage) override
+        void DamageTaken(Unit* /*done_by*/, uint32& damage, DamageEffectType /*damageType*/, SpellInfo const* /*spellInfo = nullptr*/) override
         {
             if (damage >= me->GetHealth())
             {
                 damage = 0;
                 EnterEvadeMode();
-                me->SetFaction(35);
+                me->SetFaction(FACTION_FRIENDLY);
                 bDone = true;
             }
         }
@@ -333,7 +334,7 @@ public:
             if (MovementType != POINT_MOTION_TYPE || Point != 0)
                 return;
 
-            instance->SetData(BOSS_ARGENT_CHALLENGE_P, DONE);
+            instance->SetBossState(BOSS_ARGENT_CHALLENGE_P, DONE);
 
             me->DisappearAndDie();
         }
@@ -351,9 +352,9 @@ public:
 
             if (uiHolyFireTimer <= uiDiff)
             {
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 250, true))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 250, true))
                 {
-                    if (target && target->IsAlive())
+                    if (target->IsAlive())
                         DoCast(target, SPELL_HOLY_FIRE);
                 }
                  if (me->HasAura(SPELL_SHIELD))
@@ -364,9 +365,9 @@ public:
 
             if (uiHolySmiteTimer <= uiDiff)
             {
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0, 250, true))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0, 250, true))
                 {
-                    if (target && target->IsAlive())
+                    if (target->IsAlive())
                         DoCast(target, SPELL_SMITE);
                 }
                 if (me->HasAura(SPELL_SHIELD))
@@ -457,9 +458,9 @@ public:
 
             if (uiOldWoundsTimer <= uiDiff)
             {
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0))
                 {
-                    if (target && target->IsAlive())
+                    if (target->IsAlive())
                         DoCast(target, SPELL_OLD_WOUNDS);
                 }
                 uiOldWoundsTimer = 12000;
@@ -473,9 +474,9 @@ public:
 
             if (uiShadowPastTimer <= uiDiff)
             {
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 1))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 1))
                 {
-                    if (target && target->IsAlive())
+                    if (target->IsAlive())
                         DoCast(target, SPELL_SHADOWS_PAST);
                 }
                 uiShadowPastTimer = 5000;
@@ -487,7 +488,7 @@ public:
         void JustDied(Unit* /*killer*/) override
         {
             if (TempSummon* summ = me->ToTempSummon())
-                if (Unit* summoner = summ->GetSummoner())
+                if (Unit* summoner = summ->GetSummonerUnit())
                     if (summoner->IsAlive())
                         summoner->GetAI()->SetData(1, 0);
         }
@@ -505,9 +506,9 @@ public:
     npc_argent_soldier() : CreatureScript("npc_argent_soldier") { }
 
     // THIS AI NEEDS MORE IMPROVEMENTS
-    struct npc_argent_soldierAI : public npc_escortAI
+    struct npc_argent_soldierAI : public EscortAI
     {
-        npc_argent_soldierAI(Creature* creature) : npc_escortAI(creature)
+        npc_argent_soldierAI(Creature* creature) : EscortAI(creature)
         {
             instance = creature->GetInstanceScript();
             me->SetReactState(REACT_DEFENSIVE);
@@ -519,7 +520,7 @@ public:
 
         uint8 uiWaypoint;
 
-        void WaypointReached(uint32 waypointId) override
+        void WaypointReached(uint32 waypointId, uint32 /*pathId*/) override
         {
             if (waypointId == 0)
             {
@@ -592,7 +593,7 @@ public:
 
         void UpdateAI(uint32 uiDiff) override
         {
-            npc_escortAI::UpdateAI(uiDiff);
+            EscortAI::UpdateAI(uiDiff);
 
             if (!UpdateVictim())
                 return;
@@ -668,7 +669,8 @@ class spell_paletress_summon_memory : public SpellScriptLoader
 
             void HandleScript(SpellEffIndex /*effIndex*/)
             {
-                GetHitUnit()->CastSpell(GetHitUnit(), memorySpellId[urand(0, 24)], true, nullptr, nullptr, GetCaster()->GetGUID());
+                GetHitUnit()->CastSpell(GetHitUnit(), memorySpellId[urand(0, 24)], CastSpellExtraArgs(TRIGGERED_FULL_MASK)
+                    .SetOriginalCaster(GetCaster()->GetGUID()));
             }
 
             void Register() override

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -21,7 +21,7 @@
 #include "CreatureAIImpl.h"
 
 #define ScholomanceScriptName "instance_scholomance"
-#define DataHeader "SC"
+#define DataHeader "SC_old"
 
 uint32 const EncounterCount             = 8;
 
@@ -56,10 +56,10 @@ enum SCGameobjectIds
     GO_BRAZIER_OF_THE_HERALD            = 175564
 };
 
-template<typename AI>
-inline AI* GetScholomanceAI(Creature* creature)
+template <class AI, class T>
+inline AI* GetScholomanceAI(T* obj)
 {
-    return GetInstanceAI<AI>(creature, ScholomanceScriptName);
+    return GetInstanceAI<AI>(obj, ScholomanceScriptName);
 }
 
 #endif

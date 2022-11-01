@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -32,7 +32,14 @@ MinionData const minionData[] =
 {
     { NPC_SKARVALD,     DATA_SKARVALD_DALRONN },
     { NPC_DALRONN,      DATA_SKARVALD_DALRONN },
-    { 0,                0                     } // END
+    { 0,                0 }
+};
+
+DungeonEncounterData const encounters[] =
+{
+    { DATA_PRINCE_KELESETH, {{ 2026 }} },
+    { DATA_SKARVALD_DALRONN, {{ 2024 }} },
+    { DATA_INGVAR, {{ 2025 }} }
 };
 
 class instance_utgarde_keep : public InstanceMapScript
@@ -48,6 +55,7 @@ class instance_utgarde_keep : public InstanceMapScript
                 SetBossNumber(EncounterCount);
                 LoadDoorData(doorData);
                 LoadMinionData(minionData);
+                LoadDungeonEncounterData(encounters);
             }
 
             void OnCreatureCreate(Creature* creature) override
@@ -88,6 +96,8 @@ class instance_utgarde_keep : public InstanceMapScript
 
             void OnGameObjectCreate(GameObject* go) override
             {
+                InstanceScript::OnGameObjectCreate(go);
+
                 switch (go->GetEntry())
                 {
                     case GO_BELLOW_1:
@@ -126,23 +136,6 @@ class instance_utgarde_keep : public InstanceMapScript
                         Forges[2].AnvilGUID = go->GetGUID();
                         HandleGameObject(ObjectGuid::Empty, Forges[2].Event != NOT_STARTED, go);
                         break;
-                    case GO_GIANT_PORTCULLIS_1:
-                    case GO_GIANT_PORTCULLIS_2:
-                        AddDoor(go, true);
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            void OnGameObjectRemove(GameObject* go) override
-            {
-                switch (go->GetEntry())
-                {
-                    case GO_GIANT_PORTCULLIS_1:
-                    case GO_GIANT_PORTCULLIS_2:
-                        AddDoor(go, false);
-                        break;
                     default:
                         break;
                 }
@@ -180,9 +173,6 @@ class instance_utgarde_keep : public InstanceMapScript
                         HandleGameObject(Forges[i].BellowGUID, data != NOT_STARTED);
                         HandleGameObject(Forges[i].FireGUID, data != NOT_STARTED);
                         Forges[i].Event = data;
-
-                        if (data == DONE)
-                            SaveToDB();
                         break;
                     }
                     default:
@@ -190,16 +180,11 @@ class instance_utgarde_keep : public InstanceMapScript
                 }
             }
 
-            void WriteSaveDataMore(std::ostringstream& data) override
+            void AfterDataLoad() override
             {
-                for (uint8 i = 0; i < 3; ++i)
-                    data << Forges[i].Event << ' ';
-            }
-
-            void ReadSaveDataMore(std::istringstream& data) override
-            {
-                for (uint8 i = 0; i < 3; ++i)
-                    data >> Forges[i].Event;
+                if (GetBossState(DATA_PRINCE_KELESETH) == DONE)
+                    for (uint8 i = 0; i < 3; ++i)
+                        Forges[i].Event = DONE;
             }
 
         protected:

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -40,17 +40,22 @@ enum CairneBloodhoof
     SPELL_UPPERCUT          = 22916
 };
 
-#define GOSSIP_HCB "I know this is rather silly but a young ward who is a bit shy would like your hoofprint."
+enum Sounds
+{
+    SOUND_AGGRO             = 5884
+};
+
+enum Gossips
+{
+    GOSSIP_MENU_HCB         = 5851,
+    GOSSIP_OPTION_HCB       = 0
+};
+
 /// @todo verify abilities/timers
 class npc_cairne_bloodhoof : public CreatureScript
 {
 public:
     npc_cairne_bloodhoof() : CreatureScript("npc_cairne_bloodhoof") { }
-
-    CreatureAI* GetAI(Creature* creature) const override
-    {
-        return new npc_cairne_bloodhoofAI (creature);
-    }
 
     struct npc_cairne_bloodhoofAI : public ScriptedAI
     {
@@ -79,7 +84,10 @@ public:
             Initialize();
         }
 
-        void EnterCombat(Unit* /*who*/) override { }
+        void JustEngagedWith(Unit* /*who*/) override
+        {
+            DoPlaySoundToSet(me, SOUND_AGGRO);
+        }
 
         void UpdateAI(uint32 diff) override
         {
@@ -88,7 +96,7 @@ public:
 
             if (BerserkerChargeTimer <= diff)
             {
-                if (Unit* target = SelectTarget(SELECT_TARGET_RANDOM, 0))
+                if (Unit* target = SelectTarget(SelectTargetMethod::Random, 0))
                     DoCast(target, SPELL_BERSERKER_CHARGE);
                 BerserkerChargeTimer = 25000;
             } else BerserkerChargeTimer -= diff;
@@ -119,8 +127,38 @@ public:
 
             DoMeleeAttackIfReady();
         }
+
+        bool OnGossipSelect(Player* player, uint32 /*menuId*/, uint32 gossipListId) override
+        {
+            uint32 const action = player->PlayerTalkClass->GetGossipOptionAction(gossipListId);
+            ClearGossipMenuFor(player);
+            if (action == GOSSIP_SENDER_INFO)
+            {
+                player->CastSpell(player, 23123, false);
+                SendGossipMenuFor(player, 7014, me->GetGUID());
+            }
+            return true;
+        }
+
+        bool OnGossipHello(Player* player) override
+        {
+            InitGossipMenuFor(player, GOSSIP_MENU_HCB);
+            if (me->IsQuestGiver())
+                player->PrepareQuestMenu(me->GetGUID());
+
+            if (player->GetQuestStatus(925) == QUEST_STATUS_INCOMPLETE)
+                AddGossipItemFor(player, GOSSIP_MENU_HCB, GOSSIP_OPTION_HCB, GOSSIP_SENDER_MAIN, GOSSIP_SENDER_INFO);
+
+            SendGossipMenuFor(player, 7013, me->GetGUID());
+
+            return true;
+        }
     };
 
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return new npc_cairne_bloodhoofAI(creature);
+    }
 };
 
 void AddSC_thunder_bluff()

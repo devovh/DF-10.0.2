@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -15,11 +15,10 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-#include "ScriptMgr.h"
-#include "Creature.h"
-#include "GameObject.h"
-#include "InstanceScript.h"
 #include "zulgurub.h"
+#include "Creature.h"
+#include "InstanceScript.h"
+#include "ScriptMgr.h"
 
 DoorData const doorData[] =
 {
@@ -29,6 +28,19 @@ DoorData const doorData[] =
     { GO_ZANZIL_DOOR,                   DATA_ZANZIL,    DOOR_TYPE_ROOM },
     //{ GO_THE_CACHE_OF_MADNESS_DOOR,     DATA_xxxxxxx,   DOOR_TYPE_ROOM },
     { 0,                                0,              DOOR_TYPE_ROOM }
+};
+
+DungeonEncounterData const encounters[] =
+{
+    { DATA_VENOXIS, {{ 1178 }} },
+    { DATA_MANDOKIR, {{ 1179 }} },
+    { DATA_KILNARA, {{ 1180 }} },
+    { DATA_ZANZIL, {{ 1181 }} },
+    { DATA_JINDO, {{ 1182 }} },
+    { DATA_HAZZARAH, {{ 1188 }} },
+    { DATA_RENATAKI, {{ 1188 }} },
+    { DATA_WUSHOOLAY, {{ 1188 }} },
+    { DATA_GRILEK, {{ 1188 }} }
 };
 
 class instance_zulgurub : public InstanceMapScript
@@ -43,6 +55,7 @@ class instance_zulgurub : public InstanceMapScript
                 SetHeaders(DataHeader);
                 SetBossNumber(EncounterCount);
                 LoadDoorData(doorData);
+                LoadDungeonEncounterData(encounters);
             }
 
             void OnCreatureCreate(Creature* creature) override
@@ -78,38 +91,6 @@ class instance_zulgurub : public InstanceMapScript
                         break;
                     case NPC_JINDO_TRIGGER:
                         jindoTiggerGUID = creature->GetGUID();
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            void OnGameObjectCreate(GameObject* go) override
-            {
-                switch (go->GetEntry())
-                {
-                    case GO_VENOXIS_COIL:
-                    case GO_ARENA_DOOR_1:
-                    case GO_FORCEFIELD:
-                    case GO_ZANZIL_DOOR:
-                    case GO_THE_CACHE_OF_MADNESS_DOOR:
-                        AddDoor(go, true);
-                        break;
-                    default:
-                        break;
-                }
-            }
-
-            void OnGameObjectRemove(GameObject* go) override
-            {
-                switch (go->GetEntry())
-                {
-                    case GO_VENOXIS_COIL:
-                    case GO_ARENA_DOOR_1:
-                    case GO_FORCEFIELD:
-                    case GO_ZANZIL_DOOR:
-                    case GO_THE_CACHE_OF_MADNESS_DOOR:
-                        AddDoor(go, false);
                         break;
                     default:
                         break;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2022 BfaCore Reforged
+ * This file is part of the TrinityCore Project. See AUTHORS file for Copyright information
  *
  * This program is free software; you can redistribute it and/or modify it
  * under the terms of the GNU General Public License as published by the
@@ -30,8 +30,9 @@ EndContentData */
 #include "MotionMaster.h"
 #include "ObjectAccessor.h"
 #include "Player.h"
-#include "ScriptedGossip.h"
 #include "ScriptedEscortAI.h"
+#include "ScriptedGossip.h"
+#include "TemporarySummon.h"
 #include "wailing_caverns.h"
 
 /*######
@@ -80,70 +81,17 @@ class npc_disciple_of_naralex : public CreatureScript
 public:
     npc_disciple_of_naralex() : CreatureScript("npc_disciple_of_naralex") { }
 
-    CreatureAI* GetAI(Creature* creature) const override
+    struct npc_disciple_of_naralexAI : public EscortAI
     {
-        return GetWailingCavernsAI<npc_disciple_of_naralexAI>(creature);
-    }
-
-    bool OnGossipSelect(Player* player, Creature* creature, uint32 /*sender*/, uint32 action) override
-    {
-        ClearGossipMenuFor(player);
-        InstanceScript* instance = creature->GetInstanceScript();
-        if (action == GOSSIP_ACTION_INFO_DEF + 1)
-        {
-            CloseGossipMenuFor(player);
-            if (instance)
-                instance->SetData(TYPE_NARALEX_EVENT, IN_PROGRESS);
-
-            creature->AI()->Talk(SAY_MAKE_PREPARATIONS);
-
-            creature->SetFaction(250);
-            creature->RemoveUnitFlag(UNIT_FLAG_IMMUNE_TO_PC);
-
-            ENSURE_AI(npc_escortAI, (creature->AI()))->Start(false, false, player->GetGUID());
-            ENSURE_AI(npc_escortAI, (creature->AI()))->SetDespawnAtFar(false);
-            ENSURE_AI(npc_escortAI, (creature->AI()))->SetDespawnAtEnd(false);
-        }
-        return true;
-    }
-
-    bool OnGossipHello(Player* player, Creature* creature) override
-    {
-        InstanceScript* instance = creature->GetInstanceScript();
-
-        if (instance)
-        {
-            creature->CastSpell(player, SPELL_MARK_OF_THE_WILD_RANK_2, true);
-            if ((instance->GetData(TYPE_LORD_COBRAHN) == DONE) && (instance->GetData(TYPE_LORD_PYTHAS) == DONE) &&
-                (instance->GetData(TYPE_LADY_ANACONDRA) == DONE) && (instance->GetData(TYPE_LORD_SERPENTIS) == DONE))
-            {
-                AddGossipItemFor(player, GOSSIP_OPTION_LET_EVENT_BEGIN, 0, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
-                SendGossipMenuFor(player, NPC_TEXT_FANGLORDS_ARE_DEAD, creature->GetGUID());
-
-                if (!instance->GetData(TYPE_NARALEX_YELLED))
-                {
-                    creature->AI()->Talk(SAY_AT_LAST);
-                    instance->SetData(TYPE_NARALEX_YELLED, 1);
-                }
-            }
-            else
-            {
-                SendGossipMenuFor(player, NPC_TEXT_NARALEX_SLEEPS_AGAIN, creature->GetGUID());
-            }
-        }
-        return true;
-    }
-
-    struct npc_disciple_of_naralexAI : public npc_escortAI
-    {
-        npc_disciple_of_naralexAI(Creature* creature) : npc_escortAI(creature)
+        npc_disciple_of_naralexAI(Creature* creature) : EscortAI(creature)
         {
             instance = creature->GetInstanceScript();
             eventTimer = 0;
             currentEvent = 0;
             eventProgress = 0;
             me->setActive(true);
-            me->RemoveUnitFlag(UNIT_FLAG_IMMUNE_TO_PC);
+            me->SetFarVisible(true);
+            me->SetImmuneToPC(false);
         }
 
         uint32 eventTimer;
@@ -151,7 +99,7 @@ public:
         uint32 eventProgress;
         InstanceScript* instance;
 
-        void WaypointReached(uint32 waypointId) override
+        void WaypointReached(uint32 waypointId, uint32 /*pathId*/) override
         {
             switch (waypointId)
             {
@@ -185,12 +133,12 @@ public:
 
         }
 
-        void EnterCombat(Unit* who) override
+        void JustEngagedWith(Unit* who) override
         {
             Talk(SAY_ATTACKED, who);
         }
 
-        void JustDied(Unit* /*slayer*/) override
+        void JustDied(Unit* /*killer*/) override
         {
             instance->SetData(TYPE_NARALEX_EVENT, FAIL);
             instance->SetData(TYPE_NARALEX_PART1, FAIL);
@@ -206,7 +154,7 @@ public:
         void UpdateAI(uint32 diff) override
         {
             if (currentEvent != TYPE_NARALEX_PART3)
-                npc_escortAI::UpdateAI(diff);
+                EscortAI::UpdateAI(diff);
 
             if (eventTimer <= diff)
             {
@@ -220,8 +168,8 @@ public:
                             {
                                 ++eventProgress;
                                 Talk(SAY_TEMPLE_OF_PROMISE);
-                                me->SummonCreature(NPC_DEVIATE_RAVAGER, -82.1763f, 227.874f, -93.3233f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000);
-                                me->SummonCreature(NPC_DEVIATE_RAVAGER, -72.9506f, 216.645f, -93.6756f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000);
+                                me->SummonCreature(NPC_DEVIATE_RAVAGER, -82.1763f, 227.874f, -93.3233f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5s);
+                                me->SummonCreature(NPC_DEVIATE_RAVAGER, -72.9506f, 216.645f, -93.6756f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5s);
                             }
                         break;
                         case TYPE_NARALEX_PART2:
@@ -230,16 +178,16 @@ public:
                                 ++eventProgress;
                                 Talk(SAY_BANISH_THE_SPIRITS);
                                 DoCast(me, SPELL_SERPENTINE_CLEANSING);
-                                //CAST_AI(npc_escort::npc_escortAI, me->AI())->SetCanDefend(false);
+                                //CAST_AI(EscortAI, me->AI())->SetCanDefend(false);
                                 eventTimer = 30000;
-                                me->SummonCreature(NPC_DEVIATE_VIPER, -61.5261f, 273.676f, -92.8442f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000);
-                                me->SummonCreature(NPC_DEVIATE_VIPER, -58.4658f, 280.799f, -92.8393f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000);
-                                me->SummonCreature(NPC_DEVIATE_VIPER, -50.002f,  278.578f, -92.8442f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5000);
+                                me->SummonCreature(NPC_DEVIATE_VIPER, -61.5261f, 273.676f, -92.8442f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5s);
+                                me->SummonCreature(NPC_DEVIATE_VIPER, -58.4658f, 280.799f, -92.8393f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5s);
+                                me->SummonCreature(NPC_DEVIATE_VIPER, -50.002f,  278.578f, -92.8442f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5s);
                             }
                             else
                             if (eventProgress == 2)
                             {
-                                //CAST_AI(npc_escort::npc_escortAI, me->AI())->SetCanDefend(true);
+                                //CAST_AI(EscortAI, me->AI())->SetCanDefend(true);
                                 Talk(SAY_CAVERNS_PURIFIED);
                                 instance->SetData(TYPE_NARALEX_PART2, DONE);
                                 if (me->HasAura(SPELL_SERPENTINE_CLEANSING))
@@ -259,7 +207,7 @@ public:
                             {
                                 ++eventProgress;
                                 eventTimer = 15000;
-                                //CAST_AI(npc_escort::npc_escortAI, me->AI())->SetCanDefend(false);
+                                //CAST_AI(EscortAI, me->AI())->SetCanDefend(false);
                                 if (Creature* naralex = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_NARALEX)))
                                     DoCast(naralex, SPELL_NARALEXS_AWAKENING, true);
                                 Talk(EMOTE_AWAKENING_RITUAL);
@@ -271,9 +219,9 @@ public:
                                 eventTimer = 15000;
                                 if (Creature* naralex = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_NARALEX)))
                                     naralex->AI()->Talk(EMOTE_TROUBLED_SLEEP);
-                                me->SummonCreature(NPC_DEVIATE_MOCCASIN, 135.943f, 199.701f, -103.529f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_DEVIATE_MOCCASIN, 151.08f,  221.13f,  -103.609f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_DEVIATE_MOCCASIN, 128.007f, 227.428f, -97.421f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
+                                me->SummonCreature(NPC_DEVIATE_MOCCASIN, 135.943f, 199.701f, -103.529f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_DEVIATE_MOCCASIN, 151.08f,  221.13f,  -103.609f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_DEVIATE_MOCCASIN, 128.007f, 227.428f, -97.421f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
                             }
                             else
                             if (eventProgress == 4)
@@ -282,13 +230,13 @@ public:
                                 eventTimer = 30000;
                                 if (Creature* naralex = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_NARALEX)))
                                     naralex->AI()->Talk(EMOTE_WRITHE_IN_AGONY);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 133.413f, 207.188f, -102.469f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 142.857f, 218.645f, -102.905f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 105.102f, 227.211f, -102.752f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 153.372f, 235.149f, -102.826f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 149.524f, 251.113f, -102.558f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 136.208f, 266.466f, -102.977f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
-                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 126.167f, 274.759f, -102.962f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15000);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 133.413f, 207.188f, -102.469f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 142.857f, 218.645f, -102.905f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 105.102f, 227.211f, -102.752f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 153.372f, 235.149f, -102.826f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 149.524f, 251.113f, -102.558f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 136.208f, 266.466f, -102.977f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
+                                me->SummonCreature(NPC_NIGHTMARE_ECTOPLASM, 126.167f, 274.759f, -102.962f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 15s);
                             }
                             else
                             if (eventProgress == 5)
@@ -296,8 +244,9 @@ public:
                                 ++eventProgress;
                                 if (Creature* naralex = ObjectAccessor::GetCreature(*me, instance->GetGuidData(DATA_NARALEX)))
                                     naralex->AI()->Talk(EMOTE_HORRENDOUS_VISION);
-                                me->SummonCreature(NPC_MUTANUS_THE_DEVOURER, 150.872f, 262.905f, -103.503f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 300000);
-                                Talk(SAY_MUTANUS_THE_DEVOURER);
+                                if (Creature* mutanus = me->SummonCreature(NPC_MUTANUS_THE_DEVOURER, 150.872f, 262.905f, -103.503f, 0, TEMPSUMMON_CORPSE_TIMED_DESPAWN, 5min))
+                                    Talk(SAY_MUTANUS_THE_DEVOURER, mutanus);
+
                                 instance->SetData(TYPE_MUTANUS_THE_DEVOURER, IN_PROGRESS);
                             }
                             else
@@ -370,8 +319,57 @@ public:
                 }
             } else eventTimer -= diff;
         }
+
+        bool OnGossipSelect(Player* player, uint32 /*menuId*/, uint32 gossipListId) override
+        {
+            uint32 const action = player->PlayerTalkClass->GetGossipOptionAction(gossipListId);
+            ClearGossipMenuFor(player);
+            if (action == GOSSIP_ACTION_INFO_DEF + 1)
+            {
+                CloseGossipMenuFor(player);
+                if (instance)
+                    instance->SetData(TYPE_NARALEX_EVENT, IN_PROGRESS);
+
+                Talk(SAY_MAKE_PREPARATIONS);
+
+                me->SetFaction(FACTION_ESCORTEE_N_NEUTRAL_ACTIVE);
+                me->SetImmuneToPC(false);
+
+                Start(false, false, player->GetGUID());
+                SetDespawnAtFar(false);
+                SetDespawnAtEnd(false);
+            }
+            return true;
+        }
+
+        bool OnGossipHello(Player* player) override
+        {
+            DoCast(player, SPELL_MARK_OF_THE_WILD_RANK_2, true);
+            if ((instance->GetData(TYPE_LORD_COBRAHN) == DONE) && (instance->GetData(TYPE_LORD_PYTHAS) == DONE) &&
+                (instance->GetData(TYPE_LADY_ANACONDRA) == DONE) && (instance->GetData(TYPE_LORD_SERPENTIS) == DONE))
+            {
+                InitGossipMenuFor(player, GOSSIP_OPTION_LET_EVENT_BEGIN);
+                AddGossipItemFor(player, GOSSIP_OPTION_LET_EVENT_BEGIN, 0, GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 1);
+                SendGossipMenuFor(player, NPC_TEXT_FANGLORDS_ARE_DEAD, me->GetGUID());
+
+                if (!instance->GetData(TYPE_NARALEX_YELLED))
+                {
+                    Talk(SAY_AT_LAST);
+                    instance->SetData(TYPE_NARALEX_YELLED, 1);
+                }
+            }
+            else
+            {
+                SendGossipMenuFor(player, NPC_TEXT_NARALEX_SLEEPS_AGAIN, me->GetGUID());
+            }
+            return true;
+        }
     };
 
+    CreatureAI* GetAI(Creature* creature) const override
+    {
+        return GetWailingCavernsAI<npc_disciple_of_naralexAI>(creature);
+    }
 };
 
 void AddSC_wailing_caverns()
