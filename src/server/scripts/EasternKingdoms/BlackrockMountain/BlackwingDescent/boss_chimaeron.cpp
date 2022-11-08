@@ -347,7 +347,7 @@ public:
 
     bool OnGossipHello(Player* pPlayer, Creature* creature) override
     {
-        AddGossipItemFor(pPlayer, GOSSIP_ICON_CHAT, "I suppose you'll be needing a key for this cage? Wait, don't tell me. The horrific gibbering monster behind me ate it, right?", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+1);
+        AddGossipItemFor(pPlayer, GossipOptionNpc::None, "I suppose you'll be needing a key for this cage? Wait, don't tell me. The horrific gibbering monster behind me ate it, right?", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+1);
         SendGossipMenuFor(pPlayer, 66666,creature->GetGUID());
         return true;
     }
@@ -359,19 +359,19 @@ public:
         switch (uiAction)
         {
             case GOSSIP_ACTION_INFO_DEF+1:
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, "You were trapped, as I recall. This situation seems oddly similar.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+2);
+                AddGossipItemFor(player, GossipOptionNpc::None, "You were trapped, as I recall. This situation seems oddly similar.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+2);
                 SendGossipMenuFor(player, 66667, creature->GetGUID());
                 break;
             case GOSSIP_ACTION_INFO_DEF+2:
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Gnomes in Lava Suits, for example.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+3);
+                AddGossipItemFor(player, GossipOptionNpc::None, "Gnomes in Lava Suits, for example.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+3);
                 SendGossipMenuFor(player, 66668, creature->GetGUID());
                 break;
             case GOSSIP_ACTION_INFO_DEF+3:
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, "No, I, uh, haven't seen it. You were saying?", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+4);
+                AddGossipItemFor(player, GossipOptionNpc::None, "No, I, uh, haven't seen it. You were saying?", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+4);
                 SendGossipMenuFor(player, 66669, creature->GetGUID());
                 break;
             case GOSSIP_ACTION_INFO_DEF+4:
-                AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Restrictions? What restrictions?", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+5);
+                AddGossipItemFor(player, GossipOptionNpc::None, "Restrictions? What restrictions?", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF+5);
                 SendGossipMenuFor(player, 66670, creature->GetGUID());
                 break;
             case GOSSIP_ACTION_INFO_DEF+5:

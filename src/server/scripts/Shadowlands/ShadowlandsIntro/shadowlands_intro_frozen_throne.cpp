@@ -15,7 +15,7 @@ struct npc_chilling_summons_commander : public ScriptedAI
 
     bool OnGossipHello(Player* player) override
     {
-        AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Tell me what happened.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 0);
+        AddGossipItemFor(player, GossipOptionNpc::None, "Tell me what happened.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 0);
         SendGossipMenuFor(player, 41731, me->GetGUID());
         player->PrepareQuestMenu(me->GetGUID());
 
