@@ -13,7 +13,7 @@ struct npc_chilling_summons_commander : public ScriptedAI
 {
     npc_chilling_summons_commander(Creature* c) : ScriptedAI(c) { }
 
-    bool GossipHello(Player* player) override
+    bool OnGossipHello(Player* player) override
     {
         AddGossipItemFor(player, GOSSIP_ICON_CHAT, "Tell me what happened.", GOSSIP_SENDER_MAIN, GOSSIP_ACTION_INFO_DEF + 0);
         SendGossipMenuFor(player, 41731, me->GetGUID());
@@ -22,7 +22,7 @@ struct npc_chilling_summons_commander : public ScriptedAI
         return true;
     }
 
-    bool GossipSelect(Player* player, uint32 /*menuId*/, uint32 /*gossipListId*/) override
+    bool OnGossipSelect(Player* player, uint32 /*menuId*/, uint32 /*gossipListId*/) override
     {
         if (player->GetQuestStatus(QUEST_CHILLING_SUMMONS_A) == QUEST_STATUS_INCOMPLETE || player->GetQuestStatus(QUEST_CHILLING_SUMMONS_H) == QUEST_STATUS_INCOMPLETE)
         {

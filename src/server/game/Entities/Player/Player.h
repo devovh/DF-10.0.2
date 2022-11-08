@@ -1642,6 +1642,7 @@ class TC_GAME_API Player : public Unit, public GridObject<Player>
         bool HasQuestForGO(int32 goId) const;
         void UpdateVisibleGameobjectsOrSpellClicks();
         bool CanShareQuest(uint32 questId) const;
+        void ForceCompleteQuest(uint32 questId);
 
         int32 GetQuestObjectiveData(QuestObjective const& objective) const;
         void SetQuestObjectiveData(QuestObjective const& objective, int32 data);
