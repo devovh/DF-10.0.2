@@ -58,6 +58,7 @@ void InstanceSaveManager::Load()
         {
             ++next;
             (*itr2)->ResetInstances(save->GetMapId(), save->GetDifficultyID(), true);
+            (*itr2)->BindInstance(save->GetMapId(), save->GetDifficultyID(), true);
             //(*itr2)->UnbindInstance(save->GetMapId(), save->GetDifficultyID(), true);
         }
 
@@ -65,6 +66,7 @@ void InstanceSaveManager::Load()
         {
             ++next;
             (*itr2)->ResetInstances(save->GetMapId(), save->GetDifficultyID(), true);
+            (*itr2)->BindInstance(save->GetMapId(), save->GetDifficultyID(), true);
             //(*itr2)->UnbindInstance(save->GetMapId(), save->GetDifficultyID(), true);
         }
 

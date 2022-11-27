@@ -135,6 +135,7 @@ class TC_GAME_API InstanceSave
         typedef std::list<Group*> GroupListType;
     private:
         bool UnloadIfEmpty();
+        bool Load();
         /* the only reason the instSave-object links are kept is because
            the object-instSave links need to be broken at reset time */
            /// @todo: Check if maybe it's enough to just store the number of players/groups
@@ -159,6 +160,7 @@ class TC_GAME_API InstanceSaveManager
 
     private:
         InstanceSaveManager() : lock_instLists(false) { };
+        InstanceSaveManager() : lock_instLists(true) { };
         ~InstanceSaveManager();
 
     public:
@@ -167,6 +169,7 @@ class TC_GAME_API InstanceSaveManager
         static InstanceSaveManager* instance();
 
         void Unload();
+        void Load();
 
         /* resetTime is a global propery of each (raid/heroic) map
            all instances of that map reset at the same time */
@@ -216,7 +219,9 @@ class TC_GAME_API InstanceSaveManager
             bool canReset, bool load = false);
         void RemoveInstanceSave(uint32 InstanceId);
         void UnloadInstanceSave(uint32 InstanceId);
+        void LoadInstanceSave(uint32 InstanceId);
         static void DeleteInstanceFromDB(uint32 instanceid);
+        static void LoadInstanceFromDB(uint32 instanceid);
 
         InstanceSave* GetInstanceSave(uint32 InstanceId);
 
