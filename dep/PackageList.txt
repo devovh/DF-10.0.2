@@ -1,10 +1,10 @@
 TrinityCore uses (parts of or in whole) the following opensource software:
 
-#Boost (external)
+Boost (external)
   http://www.boost.org
   Version: 1.55
 
-#Boost Process (Proposed for boost, but its not an official part of it yet. Used to start child processes.)
+Boost Process (Proposed for boost, but its not an official part of it yet. Used to start child processes.)
   http://www.highscore.de/boost/process0.5/
   Version: 0.5
 
