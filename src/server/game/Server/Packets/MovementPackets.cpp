@@ -37,7 +37,7 @@ ByteBuffer& operator<<(ByteBuffer& data, MovementInfo const& movementInfo)
     data << uint32(movementInfo.time);
     data << movementInfo.pos.PositionXYZOStream();
     data << float(movementInfo.pitch);
-    data << float(movementInfo.splineElevation);
+    data << float(movementInfo.stepUpStartElevation);
 
     uint32 removeMovementForcesCount = 0;
     data << removeMovementForcesCount;
@@ -99,7 +99,7 @@ ByteBuffer& operator>>(ByteBuffer& data, MovementInfo& movementInfo)
     data >> movementInfo.time;
     data >> movementInfo.pos.PositionXYZOStream();
     data >> movementInfo.pitch;
-    data >> movementInfo.splineElevation;
+    data >> movementInfo.stepUpStartElevation;
 
     uint32 removeMovementForcesCount;
     data >> removeMovementForcesCount;
@@ -261,8 +261,7 @@ ByteBuffer& operator<<(ByteBuffer& data, WorldPackets::Movement::MonsterSplineUn
     for (WorldPackets::Movement::MonsterSplineUnknown901::Inner const& unkInner : unk.Data)
     {
         data << int32(unkInner.Unknown_1);
-        data << int32(unkInner.Unknown_2);
-        data << int32(unkInner.Unknown_3);
+        data << unkInner.Visual;
         data << uint32(unkInner.Unknown_4);
     }
 
