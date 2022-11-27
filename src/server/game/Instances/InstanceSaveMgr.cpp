@@ -46,7 +46,8 @@ InstanceSaveManager* InstanceSaveManager::instance()
     return &instance;
 }
 
-void InstanceSaveManager::Unload()
+//void InstanceSaveManager::Unload()
+void InstanceSaveManager::Load()
 {
     lock_instLists = true;
     for (InstanceSaveHashMap::iterator itr = m_instanceSaveById.begin(); itr != m_instanceSaveById.end(); ++itr)
