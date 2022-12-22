@@ -1336,10 +1336,9 @@ void ExtractGameTables()
         { 1391662, "ArtifactLevelXP.txt" },
         { 1391663, "BarberShopCostBase.txt" },
         { 1391664, "BaseMp.txt" },
+        { 4494528, "BaseProfessionRatings.txt" },
         { 1391665, "BattlePetTypeDamageMod.txt" },
         { 1391666, "BattlePetXP.txt" },
-        { 1391667, "ChallengeModeDamage.txt" },
-        { 1391668, "ChallengeModeHealth.txt" },
         { 1391669, "CombatRatings.txt" },
         { 1391670, "CombatRatingsMultByILvl.txt" },
         { 1391671, "HonorLevel.txt" },
@@ -1348,6 +1347,7 @@ void ExtractGameTables()
         { 1726830, "ItemLevelSquish.txt" },
         { 1391643, "ItemSocketCostPerLevel.txt" },
         { 1391651, "NPCManaCostScaler.txt" },
+        { 4492239, "ProfessionRatings.txt" },
         { 1391659, "SandboxScaling.txt" },
         { 1391660, "SpellScaling.txt" },
         { 1980632, "StaminaMultByILvl.txt" },
@@ -1447,16 +1447,9 @@ static bool RetardCheck()
             if (itr->path().extension() == ".MPQ")
             {
                 printf("MPQ files found in Data directory!\n");
-                printf("This tool works only with World of Warcraft: Dragonflight\n");
+                printf("This tool works only with World of Warcraft: Battle for Azeroth\n");
                 printf("\n");
                 printf("To extract maps for Wrath of the Lich King, rebuild tools using 3.3.5 branch!\n");
-                printf("To extract maps for Cataclysm, rebuild tools using 4.3.4 branch!\n");
-                printf("To extract maps for Mist of Pandaria, rebuild tools using 5.4.8 branch!\n");
-                printf("To extract maps for Warlords of Draenor, rebuild tools using 6.2.3 branch!\n");
-                printf("To extract maps for Legion, rebuild tools using 7.3.5 branch!\n");
-                printf("To extract maps for  Battle for Azeroth, rebuild tools using 8.3.7 branch!\n");
-                printf("To extract maps for  Shadowlands, rebuild tools using 9.2.7 branch!\n");
-                printf("To extract maps for  Shadowlands, rebuild tools using 10.0.2 branch!\n");
                 printf("\n");
                 printf("Press ENTER to exit...\n");
                 getchar();
